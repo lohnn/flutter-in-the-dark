@@ -25,14 +25,13 @@ class CanvasHouse extends StatelessWidget {
 }
 
 class HousePainter extends CustomPainter {
-  final Color color = Colors.black;
-  late final Paint _paint = Paint()
-    ..color = color
+  final Paint _paint = Paint()
+    ..color = Colors.black
     ..strokeWidth = 2;
-  late final Paint _sunPaint = Paint()
+
+  final Paint _sunPaint = Paint()
     ..color = Colors.orange
     ..strokeWidth = 2;
-  final scaleTween = Tween<double>(begin: 1, end: 0.3);
 
   @override
   void paint(Canvas canvas, Size size) {
