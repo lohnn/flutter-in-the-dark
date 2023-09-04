@@ -42,6 +42,7 @@ class HomeScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
             ),
+            const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () =>
                   Navigator.pushNamed(context, FlutterFriendList.path),
@@ -49,14 +50,12 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () =>
-                  Navigator.pushNamed(context, Mirror.path),
+              onPressed: () => Navigator.pushNamed(context, Mirror.path),
               child: const Text("Mirror"),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () =>
-                  Navigator.pushNamed(context, Finals.path),
+              onPressed: () => Navigator.pushNamed(context, Finals.path),
               child: const Text("Finals"),
             ),
           ],
