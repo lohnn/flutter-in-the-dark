@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_in_the_dark/challenges/canvas.dart';
 import 'package:flutter_in_the_dark/challenges/flutter_chat.dart';
 import 'package:flutter_in_the_dark/challenges/finals.dart';
 import 'package:flutter_in_the_dark/challenges/flutter_friend_list.dart';
@@ -19,6 +20,7 @@ class MainApp extends StatelessWidget {
         FlutterFriendList.path: (_) => const FlutterFriendList(),
         Mirror.path: (_) => const Mirror(),
         FlutterChat.path: (_) => const FlutterChat(),
+        CanvasHouse.path: (_) => const CanvasHouse(),
         Finals.path: (_) => const Finals(),
       },
       home: const HomeScreen(),
@@ -49,6 +51,11 @@ class HomeScreen extends StatelessWidget {
               onPressed: () =>
                   Navigator.pushNamed(context, FlutterFriendList.path),
               child: const Text("Flutter Friend List"),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => Navigator.pushNamed(context, CanvasHouse.path),
+              child: const Text("Canvas House"),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
