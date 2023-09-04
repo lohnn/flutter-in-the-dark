@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_in_the_dark/challenges/finals.dart';
 import 'package:flutter_in_the_dark/challenges/flutter_friend_list.dart';
 
 void main() {
@@ -14,6 +15,7 @@ class MainApp extends StatelessWidget {
       routes: {
         HomeScreen.path: (_) => const HomeScreen(),
         FlutterFriendList.path: (_) => const FlutterFriendList(),
+        Finals.path: (_) => const Finals(),
       },
       home: const HomeScreen(),
     );
@@ -42,7 +44,13 @@ class HomeScreen extends StatelessWidget {
               onPressed: () =>
                   Navigator.pushNamed(context, FlutterFriendList.path),
               child: const Text("Flutter Friend List"),
-            )
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () =>
+                  Navigator.pushNamed(context, Finals.path),
+              child: const Text("Finals"),
+            ),
           ],
         ),
       ),
