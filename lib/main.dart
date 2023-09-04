@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_in_the_dark/challenges/canvas.dart';
-import 'package:flutter_in_the_dark/challenges/flutter_chat.dart';
+import 'package:flutter_in_the_dark/challenges/final_final.dart';
 import 'package:flutter_in_the_dark/challenges/finals.dart';
+import 'package:flutter_in_the_dark/challenges/flutter_chat.dart';
 import 'package:flutter_in_the_dark/challenges/flutter_friend_list.dart';
 import 'package:flutter_in_the_dark/challenges/mirror.dart';
 
@@ -22,16 +23,24 @@ class MainApp extends StatelessWidget {
         FlutterChat.path: (_) => const FlutterChat(),
         CanvasHouse.path: (_) => const CanvasHouse(),
         Finals.path: (_) => const Finals(),
+        FinalFinal.path: (_) => const FinalFinal(),
       },
       home: const HomeScreen(),
     );
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   static const path = "/home";
 
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool finalFinal = false;
 
   @override
   Widget build(BuildContext context) {
@@ -40,10 +49,17 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 100),
         child: ListView(
           children: [
-            const Center(
-              child: Text(
-                "Challenges:",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            Center(
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    finalFinal = !finalFinal;
+                  });
+                },
+                child: const Text(
+                  "Challenges:",
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -72,6 +88,17 @@ class HomeScreen extends StatelessWidget {
               onPressed: () => Navigator.pushNamed(context, Finals.path),
               child: const Text("Finals"),
             ),
+            if (finalFinal) ...[
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style: ButtonStyle(
+                    backgroundColor: MaterialStateColor.resolveWith(
+                  (states) => Colors.pink,
+                )),
+                onPressed: () => Navigator.pushNamed(context, FinalFinal.path),
+                child: const Text("Lukas vs Alek 💪"),
+              ),
+            ]
           ],
         ),
       ),

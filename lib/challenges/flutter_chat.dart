@@ -23,12 +23,18 @@ class _FlutterChatState extends State<FlutterChat> {
         child: ListView(
           children: [
             Text(chat.join("\n")),
-            TextField(controller: controller, onSubmitted: (_){
-              setState(() {
-                chat.add("[${time.toString()}]: ${controller.text}");
-                controller.text = "";
-              });
-            }),
+            TextField(
+              controller: controller,
+              onSubmitted: (_) {
+                setState(() {
+                  chat.add("[${time.toString()}]: ${controller.text}");
+                  controller.text = "";
+                });
+              },
+              decoration: const InputDecoration(
+                suffix: Text("insert here"),
+              ),
+            ),
             OutlinedButton(
                 onPressed: () {
                   setState(() {
