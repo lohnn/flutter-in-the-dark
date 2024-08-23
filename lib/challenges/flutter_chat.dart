@@ -17,11 +17,16 @@ class _FlutterChatState extends State<FlutterChat> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Flutter Chat"), centerTitle: true),
+      appBar: AppBar(
+        backgroundColor: Colors.lightGreen,
+        shadowColor: Colors.tealAccent,
+        title: const Text("Flutter Chat"),
+        centerTitle: true,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: ListView(
-          children: [
+          children: <Widget>[
             Text(chat.join("\n")),
             TextField(
               controller: controller,
@@ -35,14 +40,30 @@ class _FlutterChatState extends State<FlutterChat> {
                 suffix: Text("insert here"),
               ),
             ),
+            const SizedBox(height: 16),
             OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    chat.add("[${time.toString()}]: ${controller.text}");
-                    controller.text = "";
-                  });
-                },
-                child: const Text("Submit"))
+              style: ButtonStyle(
+                backgroundColor:
+                    MaterialStateProperty.all<Color>(Colors.lightGreen),
+                shape: MaterialStateProperty.all<RoundedRectangleBorder>(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18.0),
+                    side: const BorderSide(
+                      color: Colors.red,
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+              onPressed: () {
+                setState(() {
+                  chat.add("[${time.toString()}]: ${controller.text}");
+                  controller.text = "";
+                });
+              },
+              child:
+                  const Text("Submit", style: TextStyle(color: Colors.black)),
+            )
           ],
         ),
       ),
