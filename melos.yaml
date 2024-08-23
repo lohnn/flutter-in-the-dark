@@ -20,3 +20,6 @@ scripts:
   upgrade:
     run: melos exec -- flutter pub upgrade
     description: Upgrade to the latest supported versions of all packages.
+
+  build_web:
+    run: melos exec -- flutter build web
