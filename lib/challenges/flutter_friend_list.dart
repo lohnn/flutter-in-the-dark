@@ -15,8 +15,11 @@ class _FlutterFriendListState extends State<FlutterFriendList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:
-          AppBar(title: const Text("Flutter Friend List"), centerTitle: true),
+      appBar: AppBar(
+         backgroundColor: Colors.blueGrey,
+        title: const Text("Flutter Friend List"),
+        centerTitle: true,
+      ),
       body: ListView.separated(
         itemBuilder: (context, index) => ListTile(
           title: Padding(

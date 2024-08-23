@@ -8,8 +8,11 @@ class CanvasHouse extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:
-          AppBar(title: const Text("Draw your dream house"), centerTitle: true),
+      appBar: AppBar(
+        backgroundColor: Colors.black45,
+        title: const Text("Draw your dream house"),
+        centerTitle: true,
+      ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
