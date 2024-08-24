@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_in_the_dark_23/challenges/canvas.dart';
-import 'package:flutter_in_the_dark_23/challenges/final_final.dart';
-import 'package:flutter_in_the_dark_23/challenges/finals.dart';
-import 'package:flutter_in_the_dark_23/challenges/flutter_chat.dart';
-import 'package:flutter_in_the_dark_23/challenges/flutter_friend_list.dart';
-import 'package:flutter_in_the_dark_23/challenges/mirror.dart';
+import 'package:fitd23/challenges/canvas.dart';
+import 'package:fitd23/challenges/final_final.dart';
+import 'package:fitd23/challenges/finals.dart';
+import 'package:fitd23/challenges/flutter_chat.dart';
+import 'package:fitd23/challenges/flutter_friend_list.dart';
+import 'package:fitd23/challenges/mirror.dart';
 
 void main() {
   runApp(const MainApp());
