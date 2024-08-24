@@ -67,7 +67,10 @@ class OrganiserCard extends FFCard {
       height: 104,
       child: Center(
         child: Text(
-          'ORGANISER',
+          switch (host.name) {
+            'Dash' => 'MASCOT',
+            _ => 'ORGANISER',
+          },
           style: GoogleFonts.sourceSans3(
             fontWeight: FontWeight.normal,
             letterSpacing: 6.26,
@@ -98,7 +101,7 @@ class OrganiserCard extends FFCard {
           child: FittedBox(
             fit: BoxFit.cover,
             child: ColoredBox(
-              color: const Color(0xff8369F6),
+              color: const Color(0xff543ca3),
               child: Image.asset(
                 'assets/photos/${host.photo}',
               ),

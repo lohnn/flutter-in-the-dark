@@ -31,6 +31,24 @@ class Final extends StatelessWidget {
                     elevation: 12,
                     child: OrganiserCard(
                       host: Host(
+                        name: 'Dash',
+                        title: 'Hi 👋',
+                        photo: 'dash.png',
+                        socialText: '@FlutterDev',
+                        socialUrl: 'https://twitter.com/FlutterDev',
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: const Card(
+                    clipBehavior: Clip.antiAlias,
+                    margin: EdgeInsets.zero,
+                    elevation: 12,
+                    child: OrganiserCard(
+                      host: Host(
                         name: 'Johannes Pietilä Löhnn',
                         title: 'Not just a pretty face',
                         photo: 'johannes.jpg',
