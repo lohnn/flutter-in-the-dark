@@ -16,85 +16,25 @@ class Final extends StatelessWidget {
       ),
       body: SizedBox(
         width: double.infinity,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 900),
-                  child: const Card(
-                    clipBehavior: Clip.antiAlias,
-                    margin: EdgeInsets.zero,
-                    elevation: 12,
-                    child: OrganiserCard(
-                      host: Host(
-                        name: 'Dash',
-                        title: 'Hi 👋',
-                        photo: 'dash.png',
-                        socialText: '@FlutterDev',
-                        socialUrl: 'https://twitter.com/FlutterDev',
-                      ),
-                    ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: const Card(
+                clipBehavior: Clip.antiAlias,
+                margin: EdgeInsets.zero,
+                elevation: 12,
+                child: OrganiserCard(
+                  host: Host(
+                    name: 'Dash',
+                    title: 'Hi 👋',
+                    photo: 'dash.png',
+                    socialText: '@FlutterDev',
+                    socialUrl: 'https://twitter.com/FlutterDev',
                   ),
                 ),
-                const SizedBox(height: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 900),
-                  child: const Card(
-                    clipBehavior: Clip.antiAlias,
-                    margin: EdgeInsets.zero,
-                    elevation: 12,
-                    child: OrganiserCard(
-                      host: Host(
-                        name: 'Johannes Pietilä Löhnn',
-                        title: 'Not just a pretty face',
-                        photo: 'johannes.jpg',
-                        socialText: '@lohnn',
-                        socialUrl: 'https://twitter.com/lohnn',
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 900),
-                  child: const Card(
-                    clipBehavior: Clip.antiAlias,
-                    margin: EdgeInsets.zero,
-                    elevation: 12,
-                    child: OrganiserCard(
-                      host: Host(
-                        name: 'Alek Åström',
-                        title: 'I get it Done 👷‍♂️',
-                        photo: 'alek.png',
-                        socialText: '@MisterAlek',
-                        socialUrl: 'https://twitter.com/MisterAlek',
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 900),
-                  child: const Card(
-                    clipBehavior: Clip.antiAlias,
-                    margin: EdgeInsets.zero,
-                    elevation: 12,
-                    child: OrganiserCard(
-                      host: Host(
-                        name: 'Lukas Klingsbo',
-                        title: 'At least my name has no swedish characters',
-                        photo: 'lukas.jpeg',
-                        socialText: '@spydon',
-                        socialUrl: 'https://twitter.com/spydon',
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
