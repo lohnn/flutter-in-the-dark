@@ -18,3 +18,8 @@ class MainApp extends StatelessWidget {
     );
   }
 }
+
+const alek = AssetImage('assets/photos/alek.png');
+const lukas = AssetImage('assets/photos/lukas.png');
+const johannes = AssetImage('assets/photos/johannes.png');
+const dash = AssetImage('assets/photos/dash.png');
