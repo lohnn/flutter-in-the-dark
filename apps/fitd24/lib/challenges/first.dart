@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 class First extends StatelessWidget {
@@ -22,7 +24,14 @@ class First extends StatelessWidget {
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 150),
-                  child: Image.asset('assets/logos/hackberry.png'),
+                  child: WiggleWidget(
+                      child: Image.asset('assets/logos/hackberry_1.png')),
+                ),
+              ),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 150),
+                  child: Image.asset('assets/logos/hackberry_2.png'),
                 ),
               ),
               const SizedBox(height: 60),
@@ -73,6 +82,66 @@ class First extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class WiggleWidget extends StatefulWidget {
+  final Widget child;
+  final Duration duration;
+
+  const WiggleWidget({
+    super.key,
+    required this.child,
+    this.duration = const Duration(seconds: 3),
+  });
+
+  @override
+  State<WiggleWidget> createState() => _WiggleWidgetState();
+}
+
+class _WiggleWidgetState extends State<WiggleWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  late Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+
+    _timer = Timer.periodic(widget.duration, (_) {
+      _controller.forward(from: 0.0).then((_) {
+        _controller.reverse();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RotationTransition(
+      alignment: Alignment.bottomLeft,
+      turns: Tween(
+        begin: 0.0,
+        end: 0.1,
+      ).animate(
+        CurvedAnimation(
+          curve: Curves.ease,
+          parent: _controller,
+        ),
+      ),
+      child: widget.child,
     );
   }
 }

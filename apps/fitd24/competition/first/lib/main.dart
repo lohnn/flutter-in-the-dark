@@ -21,3 +21,5 @@ class MainApp extends StatelessWidget {
 
 const color1 = Color(0xff3c2b79);
 const color2 = Color(0xff594a8f);
+final hackberryLeaf = Image.asset('assets/logos/hackberry_1.png');
+final hackberryB = Image.asset('assets/logos/hackberry_2.png');
