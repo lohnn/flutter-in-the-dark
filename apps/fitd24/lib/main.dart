@@ -15,6 +15,8 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      themeMode: ThemeMode.dark,
+      darkTheme: ThemeData.dark(),
       routes: {
         HomeScreen.path: (_) => const HomeScreen(),
         '/first': (_) => const First(),
