@@ -1,4 +1,5 @@
 import 'package:fitd24/challenges/final/final_card.dart';
+import 'package:fitd24/challenges/first/first.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -13,6 +14,7 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       routes: {
         HomeScreen.path: (_) => const HomeScreen(),
+        '/first': (_) => const First(),
         Final.path: (_) => const Final(),
       },
       home: const HomeScreen(),
@@ -30,8 +32,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool finalFinal = false;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -39,35 +39,21 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 100),
         child: ListView(
           children: [
-            Center(
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    finalFinal = !finalFinal;
-                  });
-                },
-                child: const Text(
-                  "Challenges:",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
+            const Center(
+              child: Text(
+                "Challenges:",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pushNamed(context, '/first'),
+              child: const Text("First"),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => Navigator.pushNamed(context, Final.path),
               child: const Text("Final 🎉"),
             ),
-            // if (finalFinal) ...[
-            //   const SizedBox(height: 16),
-            //   ElevatedButton(
-            //     style: ButtonStyle(
-            //         backgroundColor: MaterialStateColor.resolveWith(
-            //               (states) => Colors.pink,
-            //         )),
-            //     onPressed: () => Navigator.pushNamed(context, FinalFinal.path),
-            //     child: const Text("Lukas vs Alek 💪"),
-            //   ),
-            // ]
           ],
         ),
       ),
