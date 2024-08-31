@@ -15,8 +15,8 @@ class MainApp extends StatelessWidget {
       themeMode: ThemeMode.dark,
       darkTheme: ThemeData.dark(),
       home: const Scaffold(
-        body: FrostedBackground(
-          image: dash,
+        body: Center(
+          child: Text('Hello World!'),
         ),
       ),
     );

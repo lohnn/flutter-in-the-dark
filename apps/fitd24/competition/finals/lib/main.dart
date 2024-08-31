@@ -10,8 +10,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
+    return MaterialApp(
+      themeMode: ThemeMode.dark,
+      darkTheme: ThemeData.dark(),
+      home: const Scaffold(
         body: Center(
           child: Text('Hello World!'),
         ),
@@ -23,13 +25,11 @@ class MainApp extends StatelessWidget {
 final cardBackground = createCompatVectorGraphic(
   loader: const AssetBytesLoader(
     'assets/svgs/ff_card_background.svg',
-    packageName: 'ff_card',
   ),
 );
 
 final kulturhuset = Image.asset(
   'assets/images/kulturhuset.png',
-  package: 'ff_card',
 );
 
 final dash = Image.asset(
@@ -39,6 +39,5 @@ final dash = Image.asset(
 final ffLogo = createCompatVectorGraphic(
   loader: const AssetBytesLoader(
     'assets/svgs/ff_logo.svg',
-    packageName: 'ff_card',
   ),
 );
