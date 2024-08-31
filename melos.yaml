@@ -8,6 +8,10 @@ command:
     environment:
       sdk: ">=3.5.0 <4.0.0"
     dependencies:
+      ff_card:
+        git:
+          url: https://github.com/lohnn/flutter_and_friends_speaker_cards.git
+          path: ff_card
       flutter:
         sdk: flutter
       flutter_hooks: ^0.21.1-pre.4
