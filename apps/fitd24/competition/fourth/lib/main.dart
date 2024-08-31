@@ -12,8 +12,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
+    return MaterialApp(
+      themeMode: ThemeMode.dark,
+      darkTheme: ThemeData.dark(),
+      home: const Scaffold(
         body: Center(
           child: Text('Hello World!'),
         ),
@@ -38,7 +40,7 @@ class _FrostedBackgroundState extends State<FrostedBackground> {
   @override
   void initState() {
     WidgetsBinding.instance.addPostFrameCallback(
-          (_) {
+      (_) {
         moveRandom(
           height: 300,
           width: 300,
