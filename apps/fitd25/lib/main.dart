@@ -43,6 +43,8 @@ class AutoToggle extends StatefulWidget {
 class _AutoToggleState extends State<AutoToggle> {
   late final StreamSubscription _subscription;
   String? _currentPath;
+  DateTime? _startTime;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -55,9 +57,13 @@ class _AutoToggleState extends State<AutoToggle> {
         final data = value.data();
 
         switch (data) {
-          case {'path': final path}:
+          case {
+              'path': final String path,
+              'startTime': final Timestamp startTime
+            }:
             setState(() {
               _currentPath = path;
+              countDown(startTime.toDate());
             });
             break;
           default:
@@ -68,6 +74,26 @@ class _AutoToggleState extends State<AutoToggle> {
     super.initState();
   }
 
+  void countDown(DateTime startTime) {
+    if (DateTime.now().isAfter(startTime)) return;
+
+    _startTime = startTime;
+    _timer?.cancel();
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (timer) {
+        if (DateTime.now().isAfter(startTime)) {
+          timer.cancel();
+          _timer = null;
+          _startTime = null;
+          setState(() {});
+        } else {
+          setState(() {});
+        }
+      },
+    );
+  }
+
   @override
   void dispose() {
     _subscription.cancel();
@@ -76,6 +102,17 @@ class _AutoToggleState extends State<AutoToggle> {
 
   @override
   Widget build(BuildContext context) {
+    if (_startTime case final startTime?) {
+      final duration = startTime.difference(DateTime.now());
+      return Scaffold(
+        body: Center(
+          child: Text(
+            'Starting $_currentPath challenge in ${duration.inSeconds + 1}',
+          ),
+        ),
+      );
+    }
+
     return switch (_currentPath) {
       'first' => const First(),
       'second' => const Second(),
