@@ -61,7 +61,7 @@ class _AutoToggleState extends State<AutoToggle> {
             });
             break;
           default:
-            print('The map does not contain the key "path"');
+            debugPrint('The map does not contain the key "path"');
         }
       },
     );
