@@ -9,12 +9,16 @@ import 'package:fitd25/challenges/second.dart';
 import 'package:fitd25/challenges/third.dart';
 import 'package:fitd25/firebase_options.dart';
 import 'package:flutter/material.dart';
+import 'package:timeago_flutter/timeago_flutter.dart' as timeago;
+import 'package:timeago_flutter/timeago_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  timeago.setLocaleMessages('en', OverrideEnTimeAgo());
+  timeago.setDefaultLocale('en');
   runApp(const MainApp());
 }
 
@@ -103,11 +107,17 @@ class _AutoToggleState extends State<AutoToggle> {
   @override
   Widget build(BuildContext context) {
     if (_startTime case final startTime?) {
-      final duration = startTime.difference(DateTime.now());
       return Scaffold(
         body: Center(
-          child: Text(
-            'Starting $_currentPath challenge in ${duration.inSeconds + 1}',
+          child: Timeago(
+            refreshRate: const Duration(seconds: 1),
+            date: startTime,
+            allowFromNow: true,
+            builder: (context, time) {
+              return Text(
+                'Starting $_currentPath challenge in $time',
+              );
+            },
           ),
         ),
       );
@@ -137,4 +147,15 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class OverrideEnTimeAgo extends EnMessages {
+  @override
+  String suffixFromNow() => '';
+
+  @override
+  String suffixAgo() => '';
+
+  @override
+  String lessThanOneMinute(int seconds) => '$seconds seconds';
 }
