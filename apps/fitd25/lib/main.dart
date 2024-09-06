@@ -9,8 +9,10 @@ import 'package:fitd25/challenges/second.dart';
 import 'package:fitd25/challenges/third.dart';
 import 'package:fitd25/firebase_options.dart';
 import 'package:flutter/material.dart';
-import 'package:timeago_flutter/timeago_flutter.dart' as timeago;
-import 'package:timeago_flutter/timeago_flutter.dart';
+import 'package:timeago_flutter/timeago_flutter.dart'
+    hide setLocaleMessages, setDefaultLocale;
+import 'package:timeago_flutter/timeago_flutter.dart' as timeago
+    show setLocaleMessages, setDefaultLocale;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,6 +50,7 @@ class _AutoToggleState extends State<AutoToggle> {
   late final StreamSubscription _subscription;
   String? _currentPath;
   DateTime? _startTime;
+  DateTime? _endTime;
   Timer? _timer;
 
   @override
@@ -63,10 +66,12 @@ class _AutoToggleState extends State<AutoToggle> {
         switch (data) {
           case {
               'path': final String path,
-              'startTime': final Timestamp startTime
+              'startTime': final Timestamp startTime,
+              'endTime': final Timestamp endTime,
             }:
             setState(() {
               _currentPath = path;
+              _endTime = endTime.toDate();
               countDown(startTime.toDate());
             });
             break;
@@ -79,21 +84,20 @@ class _AutoToggleState extends State<AutoToggle> {
   }
 
   void countDown(DateTime startTime) {
-    if (DateTime.now().isAfter(startTime)) return;
-
-    _startTime = startTime;
     _timer?.cancel();
-    _timer = Timer.periodic(
-      const Duration(seconds: 1),
-      (timer) {
-        if (DateTime.now().isAfter(startTime)) {
-          timer.cancel();
+    _timer = null;
+
+    if (DateTime.now().isAfter(startTime)) return;
+    _startTime = startTime;
+
+    _timer = Timer(
+      startTime.difference(DateTime.now()),
+      () {
+        setState(() {
+          _timer?.cancel();
           _timer = null;
           _startTime = null;
-          setState(() {});
-        } else {
-          setState(() {});
-        }
+        });
       },
     );
   }
@@ -108,29 +112,46 @@ class _AutoToggleState extends State<AutoToggle> {
   Widget build(BuildContext context) {
     if (_startTime case final startTime?) {
       return Scaffold(
-        body: Center(
-          child: Timeago(
-            refreshRate: const Duration(seconds: 1),
-            date: startTime,
-            allowFromNow: true,
-            builder: (context, time) {
-              return Text(
-                'Starting $_currentPath challenge in $time',
-              );
-            },
-          ),
+        body: Timeago(
+          refreshRate: const Duration(seconds: 1),
+          date: startTime,
+          allowFromNow: true,
+          builder: (context, time) {
+            return Text(
+              'Starting $_currentPath challenge in $time',
+            );
+          },
         ),
       );
     }
 
-    return switch (_currentPath) {
-      'first' => const First(),
-      'second' => const Second(),
-      'third' => const Third(),
-      'fourth' => const Fourth(),
-      'finals' => const Final(),
-      _ => const HomeScreen(),
-    };
+    return Scaffold(
+      appBar: AppBar(
+        title: switch (_endTime) {
+          null => null,
+          final endTime => Timeago(
+              refreshRate: const Duration(seconds: 1),
+              date: endTime,
+              allowFromNow: true,
+              builder: (context, time) {
+                // TODO: Figure out a nice way to shake screen and throw confetti
+                if (DateTime.now().isAfter(endTime)) {
+                  return const Text('Time over!');
+                }
+                return Text(time);
+              },
+            ),
+        },
+      ),
+      body: switch (_currentPath) {
+        'first' => const First(),
+        'second' => const Second(),
+        'third' => const Third(),
+        'fourth' => const Fourth(),
+        'finals' => const Final(),
+        _ => const HomeScreen(),
+      },
+    );
   }
 }
 
@@ -141,10 +162,8 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text("Hi! I'm just waiting for better times."),
-      ),
+    return const Center(
+      child: Text('No challenge ongoing right now.'),
     );
   }
 }
