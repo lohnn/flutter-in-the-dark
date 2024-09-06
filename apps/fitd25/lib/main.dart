@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:confetti/confetti.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:fitd25/challenges/final.dart';
 import 'package:fitd25/challenges/first.dart';
@@ -52,6 +53,10 @@ class _AutoToggleState extends State<AutoToggle> {
   DateTime? _startTime;
   DateTime? _endTime;
   Timer? _timer;
+  Timer? _finishTimer;
+  final confettiController = ConfettiController(
+    duration: const Duration(seconds: 5),
+  );
 
   @override
   void initState() {
@@ -62,7 +67,6 @@ class _AutoToggleState extends State<AutoToggle> {
         .listen(
       (value) {
         final data = value.data();
-
         switch (data) {
           case {
               'path': final String path,
@@ -73,6 +77,7 @@ class _AutoToggleState extends State<AutoToggle> {
               _currentPath = path;
               _endTime = endTime.toDate();
               countDown(startTime.toDate());
+              countFinish(endTime.toDate());
             });
             break;
           default:
@@ -102,6 +107,26 @@ class _AutoToggleState extends State<AutoToggle> {
     );
   }
 
+  void countFinish(DateTime endTime) {
+    _finishTimer?.cancel();
+    _finishTimer = null;
+
+    if (DateTime.now().isAfter(endTime)) return;
+    _endTime = endTime;
+
+    _finishTimer = Timer(
+      endTime.difference(DateTime.now()),
+      () {
+        setState(() {
+          _finishTimer?.cancel();
+          _finishTimer = null;
+          _endTime = null;
+        });
+        confettiController.play();
+      },
+    );
+  }
+
   @override
   void dispose() {
     _subscription.cancel();
@@ -124,33 +149,42 @@ class _AutoToggleState extends State<AutoToggle> {
         ),
       );
     }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: switch (_endTime) {
-          null => null,
-          final endTime => Timeago(
-              refreshRate: const Duration(seconds: 1),
-              date: endTime,
-              allowFromNow: true,
-              builder: (context, time) {
-                // TODO: Figure out a nice way to shake screen and throw confetti
-                if (DateTime.now().isAfter(endTime)) {
-                  return const Text('Time over!');
-                }
-                return Text(time);
-              },
-            ),
-        },
-      ),
-      body: switch (_currentPath) {
-        'first' => const First(),
-        'second' => const Second(),
-        'third' => const Third(),
-        'fourth' => const Fourth(),
-        'finals' => const Final(),
-        _ => const HomeScreen(),
-      },
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            title: switch (_endTime) {
+              null => const Text('Time over!'),
+              final endTime => Timeago(
+                  refreshRate: const Duration(seconds: 1),
+                  date: endTime,
+                  allowFromNow: true,
+                  builder: (context, time) {
+                    // TODO: Figure out a nice way to shake screen and throw confetti
+                    if (DateTime.now().isAfter(endTime)) {
+                      return const Text('Time over!');
+                    }
+                    return Text(time);
+                  },
+                ),
+            },
+          ),
+          body: switch (_currentPath) {
+            'first' => const First(),
+            'second' => const Second(),
+            'third' => const Third(),
+            'fourth' => const Fourth(),
+            'finals' => const Final(),
+            _ => const HomeScreen(),
+          },
+        ),
+        ConfettiWidget(
+          confettiController: confettiController,
+          blastDirectionality: BlastDirectionality.explosive,
+          strokeWidth: 2,
+        ),
+      ],
     );
   }
 }
