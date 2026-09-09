@@ -17,6 +17,7 @@ import 'package:flutter_in_the_dark/screens/player_selection_screen.dart';
 import 'package:flutter_in_the_dark/screens/waiting_for_challenge_screen.dart';
 import 'package:flutter_in_the_dark/widgets/challenger_content.dart';
 import 'package:flutter_in_the_dark/widgets/compiled_widget.dart';
+import 'package:flutter_in_the_dark/widgets/pane_tab_shell.dart';
 import 'package:flutter_in_the_dark/widgets/plasma_loader.dart';
 import 'package:flutter_in_the_dark/widgets/prompt_editor.dart';
 import 'package:flutter_in_the_dark/widgets/show_overlay.dart';
@@ -30,6 +31,11 @@ import 'package:web/web.dart' as web;
 ///    buzzer pushes prompts server-side (§6.C).
 ///  - DONE (buzzer fired): challenge (left) + prompt→result (right), where
 ///    the result pane is the SAME tri-state render as /show (§6.D).
+///
+/// Both phases also have a mobile treatment: on compact (phone-width)
+/// viewports they render as full-screen AppBar tabs in one shared
+/// [PaneTabShell] node (LIVE defaults to the Prompt tab, DONE to Result);
+/// desktop (≥ kPaneTabShellBreakpoint) keeps the SplitPane layout untouched.
 class ChallengeScreen extends StatefulHookWidget {
   const ChallengeScreen({super.key, required this.roomSync});
 
@@ -241,43 +247,59 @@ class _ChallengeScreenState extends State<ChallengeScreen>
       [done],
     );
 
+    // Compact (phone) viewport → mobile tab-shell treatment for the LIVE
+    // phase (I-022: the safe, desktop-unchanged path is what this build
+    // nodes into when compact is false — decided here at the call site).
+    final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
+
     return Material(
       child: SlideTransition(
         position: _shakeAnimation,
         child: Stack(
           alignment: Alignment.topCenter,
           children: [
-            Scaffold(
-              appBar: AppBar(
-                title: Row(
-                  children: [
-                    // The display name is server state — read from the room,
-                    // never from localStorage (WI-012). `me` is null only
-                    // during the reconnect window.
-                    Text('Challenger: ${me?.name ?? '…'}'),
-                    const Spacer(),
-                    switch (challenge.endTime) {
-                      final endTime when DateTime.now().isAfter(endTime) =>
-                        const Text('Time over!'),
-                      final endTime => Timeago(
-                          refreshRate: const Duration(seconds: 1),
-                          date: endTime.toLocal(),
-                          allowFromNow: true,
-                          builder: (context, time) {
-                            if (DateTime.now().isAfter(endTime)) {
-                              return const Text('Time over!');
-                            }
-                            return Text('"${challenge.name}" ends in $time');
-                          },
-                        ),
-                    },
-                  ],
+            // Mobile keeps a SINGLE PaneTabShell node across BOTH phases:
+            // same widget type and Stack position through the live→done
+            // swap, so it is an element UPDATE (didUpdateWidget) — shell
+            // state and the pane-0 challenge iframe survive the buzzer.
+            // Desktop keeps the Scaffold node exactly as it is (I-022).
+            if (compact)
+              if (done)
+                _buildMobileDone(challenge, me, state)
+              else
+                _buildMobileLive(challenge, session)
+            else
+              Scaffold(
+                appBar: AppBar(
+                  title: Row(
+                    children: [
+                      // The display name is server state — read from the room,
+                      // never from localStorage (WI-012). `me` is null only
+                      // during the reconnect window.
+                      Text('Challenger: ${me?.name ?? '…'}'),
+                      const Spacer(),
+                      switch (challenge.endTime) {
+                        final endTime when DateTime.now().isAfter(endTime) =>
+                          const Text('Time over!'),
+                        final endTime => Timeago(
+                            refreshRate: const Duration(seconds: 1),
+                            date: endTime.toLocal(),
+                            allowFromNow: true,
+                            builder: (context, time) {
+                              if (DateTime.now().isAfter(endTime)) {
+                                return const Text('Time over!');
+                              }
+                              return Text('"${challenge.name}" ends in $time');
+                            },
+                          ),
+                      },
+                    ],
+                  ),
                 ),
+                body: done
+                    ? _buildDone(context, challenge, me, state)
+                    : _buildLive(context, challenge, session),
               ),
-              body: done
-                  ? _buildDone(context, challenge, me, state)
-                  : _buildLive(context, challenge, session),
-            ),
             ConfettiWidget(
               confettiController: _confettiController,
               blastDirectionality: BlastDirectionality.explosive,
@@ -292,7 +314,12 @@ class _ChallengeScreenState extends State<ChallengeScreen>
             Positioned.fill(
               child: TimeOverBanner(endTime: challenge.endTime),
             ),
-            if (done)
+            // Desktop-only done scrim, permanent by design. On MOBILE the
+            // done phase is interactive tabs and this pointer-blocking layer
+            // resting over the shell would freeze the TabBar (W-068 family:
+            // pointer-blocking layers must sit away from interactive
+            // surfaces) — mobile locks input via the panel swap instead.
+            if (done && !compact)
               Positioned.fill(
                 child: PointerInterceptor(
                   child: Material(
@@ -319,7 +346,29 @@ class _ChallengeScreenState extends State<ChallengeScreen>
     Challenge challenge,
     ({String playerId, String token, String roundId}) session,
   ) {
-    final panes = <Widget>[
+    return SplitPane(
+      axis: Axis.horizontal,
+      initialFractions: challenge.assets.isEmpty
+          ? const [0.45, 0.55]
+          : const [0.35, 0.45, 0.2],
+      // Live layout only renders pre-buzzer (the done phase swaps to
+      // [_buildDone]) — done: false is always true of this call site.
+      children: _livePanes(challenge, session, done: false),
+    );
+  }
+
+  /// The live panes, built once and shared by both the desktop SplitPane and
+  /// the mobile PaneTabShell so the PromptEditor's ValueKey/params can't
+  /// drift between the two layouts. [done] feeds the PromptEditor's enabled
+  /// flag: belt-and-suspenders on top of the buzzer lock-down (active-element
+  /// blur + the done scrim/pane swap) — today the editor unmounts at done
+  /// anyway, so this is defense in depth, not a behavior change.
+  List<Widget> _livePanes(
+    Challenge challenge,
+    ({String playerId, String token, String roundId}) session, {
+    required bool done,
+  }) {
+    return <Widget>[
       _ChallengePane(widgetUrl: challenge.widgetUrl),
       PromptEditor(
         key: ValueKey('editor-${session.playerId}'),
@@ -329,17 +378,68 @@ class _ChallengeScreenState extends State<ChallengeScreen>
             widget.roomSync.state?.challengerById(session.playerId)?.prompt ??
                 '',
         client: widget.roomSync.client,
+        enabled: !done,
         onStaleSession: _onStaleSession,
       ),
       if (challenge.assets.isNotEmpty) _AssetsPane(assets: challenge.assets),
     ];
+  }
 
-    return SplitPane(
-      axis: Axis.horizontal,
-      initialFractions: challenge.assets.isEmpty
-          ? const [0.45, 0.55]
-          : const [0.35, 0.45, 0.2],
-      children: panes,
+  /// LIVE phase on compact (phone) viewports: the same panes as the desktop
+  /// SplitPane ([_livePanes]) behind full-screen AppBar tabs, since three
+  /// side-by-side panes are unreadable at phone width. Open on the Prompt
+  /// tab (index 1): the challenge runs fullscreen on the conference
+  /// projector, so the challenger's own screen starts on their text field.
+  /// The shell's IndexedStack keeps every pane alive across switches —
+  /// unsynced prompt text and the challenge iframes must not be discarded.
+  /// (DONE continues in the SAME shell node — see [_buildMobileDone].)
+  Widget _buildMobileLive(
+    Challenge challenge,
+    ({String playerId, String token, String roundId}) session,
+  ) {
+    // Live shell only renders pre-buzzer (done swaps to [_buildMobileDone]).
+    final panes = _livePanes(challenge, session, done: false);
+    return PaneTabShell(
+      title: _buildMobileTitle(challenge),
+      initialIndex: 1,
+      tabs: [
+        ('Challenge', panes[0]),
+        ('Prompt', panes[1]),
+        if (challenge.assets.isNotEmpty) ('Assets', panes[2]),
+      ],
+    );
+  }
+
+  /// Compact AppBar title. The desktop title Row ("Challenger: name" +
+  /// countdown) overflows at ~360 dp because an AppBar positions its title
+  /// itself and has no width of its own to wrap into (I-097), so the mobile
+  /// treatment drops the name and scale-downs the bare countdown line to one
+  /// line at a smaller base size (I-056: shrink to fit, never wrap
+  /// mid-word). It mirrors the desktop title's switch/Timeago logic inline —
+  /// deliberately not extracted, so the desktop path stays byte-identical.
+  Widget _buildMobileTitle(Challenge challenge) {
+    const style = TextStyle(fontSize: 14);
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: switch (challenge.endTime) {
+        final endTime when DateTime.now().isAfter(endTime) =>
+          const Text('Time over!', maxLines: 1, style: style),
+        final endTime => Timeago(
+            refreshRate: const Duration(seconds: 1),
+            date: endTime.toLocal(),
+            allowFromNow: true,
+            builder: (context, time) {
+              if (DateTime.now().isAfter(endTime)) {
+                return const Text('Time over!', maxLines: 1, style: style);
+              }
+              return Text(
+                '"${challenge.name}" ends in $time',
+                maxLines: 1,
+                style: style,
+              );
+            },
+          ),
+      },
     );
   }
 
@@ -351,26 +451,67 @@ class _ChallengeScreenState extends State<ChallengeScreen>
     Challenger? me,
     RoomState? state,
   ) {
+    return SplitPane(
+      axis: Axis.horizontal,
+      initialFractions: const [0.5, 0.5],
+      children: _donePanes(challenge, me, state),
+    );
+  }
+
+  /// The done panes, shared by the desktop SplitPane ([_buildDone]) and the
+  /// mobile PaneTabShell ([_buildMobileDone]) so the two layouts can't drift:
+  /// pane 0 the challenge widget, pane 1 the buzzer result — the same
+  /// tri-state render as /show (§6.D), 'Reconnecting…' until the challenger
+  /// has re-synced after the buzzer.
+  List<Widget> _donePanes(
+    Challenge challenge,
+    Challenger? me,
+    RoomState? state,
+  ) {
     final content = me == null
         ? DisplayContent.prompt
         : (state?.contentFor(me.id) ?? DisplayContent.prompt);
 
-    return SplitPane(
-      axis: Axis.horizontal,
-      initialFractions: const [0.5, 0.5],
-      children: [
-        _ChallengePane(widgetUrl: challenge.widgetUrl),
-        ColoredBox(
-          color: const Color(0xFF0D1117),
-          child: me == null
-              ? const PlasmaLoader(label: 'Reconnecting…')
-              : ChallengerContent(
-                  challenger: me,
-                  content: content,
-                  expanded: true,
-                ),
-        ),
-      ],
+    return <Widget>[
+      _ChallengePane(widgetUrl: challenge.widgetUrl),
+      ColoredBox(
+        color: const Color(0xFF0D1117),
+        child: me == null
+            ? const PlasmaLoader(label: 'Reconnecting…')
+            : ChallengerContent(
+                challenger: me,
+                content: content,
+                expanded: true,
+              ),
+      ),
+    ];
+  }
+
+  /// DONE phase on compact viewports: the same panes as the desktop SplitPane
+  /// ([_donePanes]) behind two tabs — 'Challenge' | 'Result' — instead of a
+  /// SplitPane sitting frozen under the desktop scrim.
+  ///
+  /// This is the SAME PaneTabShell widget type in the same Stack position as
+  /// the live build, so the buzzer swap is an element UPDATE
+  /// (didUpdateWidget): the shell recreates its TabController for the
+  /// 3→2/2→2 tab-count change with the CURRENT index clamped — and the live
+  /// default was the (clamped-unchanged) index 1 = Prompt, which maps
+  /// positionally onto this set's Result — so callers land on Result without
+  /// a new decision ([initialIndex] 1 below is only that same default for a
+  /// fresh mount). The Challenge pane at index 0 is an identical widget to
+  /// the live set, so its CompiledWidget iframe is not reloaded at the
+  /// buzzer. The title is shared too — [_buildMobileTitle] already renders
+  /// 'Time over!' once endTime passes.
+  Widget _buildMobileDone(
+    Challenge challenge,
+    Challenger? me,
+    RoomState? state,
+  ) {
+    final panes = _donePanes(challenge, me, state);
+    return PaneTabShell(
+      title: _buildMobileTitle(challenge),
+      initialIndex: 1,
+      tabs: [('Challenge', panes[0]), ('Result', panes[1])],
     );
   }
 }
