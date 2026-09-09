@@ -17,6 +17,7 @@ import 'package:flutter_in_the_dark/screens/player_selection_screen.dart';
 import 'package:flutter_in_the_dark/screens/waiting_for_challenge_screen.dart';
 import 'package:flutter_in_the_dark/widgets/challenger_content.dart';
 import 'package:flutter_in_the_dark/widgets/compiled_widget.dart';
+import 'package:flutter_in_the_dark/widgets/pane_tab_shell.dart';
 import 'package:flutter_in_the_dark/widgets/plasma_loader.dart';
 import 'package:flutter_in_the_dark/widgets/prompt_editor.dart';
 import 'package:flutter_in_the_dark/widgets/show_overlay.dart';
@@ -30,6 +31,10 @@ import 'package:web/web.dart' as web;
 ///    buzzer pushes prompts server-side (§6.C).
 ///  - DONE (buzzer fired): challenge (left) + prompt→result (right), where
 ///    the result pane is the SAME tri-state render as /show (§6.D).
+///
+/// LIVE also has a mobile treatment: on compact (phone-width) viewports the
+/// panes become full-screen AppBar tabs ([PaneTabShell], Prompt tab default);
+/// desktop (≥ kPaneTabShellBreakpoint) keeps the SplitPane layout untouched.
 class ChallengeScreen extends StatefulHookWidget {
   const ChallengeScreen({super.key, required this.roomSync});
 
@@ -241,43 +246,51 @@ class _ChallengeScreenState extends State<ChallengeScreen>
       [done],
     );
 
+    // Compact (phone) viewport → mobile tab-shell treatment for the LIVE
+    // phase (I-022: the safe, desktop-unchanged path is what this build
+    // nodes into when compact is false — decided here at the call site).
+    final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
+
     return Material(
       child: SlideTransition(
         position: _shakeAnimation,
         child: Stack(
           alignment: Alignment.topCenter,
           children: [
-            Scaffold(
-              appBar: AppBar(
-                title: Row(
-                  children: [
-                    // The display name is server state — read from the room,
-                    // never from localStorage (WI-012). `me` is null only
-                    // during the reconnect window.
-                    Text('Challenger: ${me?.name ?? '…'}'),
-                    const Spacer(),
-                    switch (challenge.endTime) {
-                      final endTime when DateTime.now().isAfter(endTime) =>
-                        const Text('Time over!'),
-                      final endTime => Timeago(
-                          refreshRate: const Duration(seconds: 1),
-                          date: endTime.toLocal(),
-                          allowFromNow: true,
-                          builder: (context, time) {
-                            if (DateTime.now().isAfter(endTime)) {
-                              return const Text('Time over!');
-                            }
-                            return Text('"${challenge.name}" ends in $time');
-                          },
-                        ),
-                    },
-                  ],
+            if (compact && !done)
+              _buildMobileLive(challenge, session)
+            else
+              Scaffold(
+                appBar: AppBar(
+                  title: Row(
+                    children: [
+                      // The display name is server state — read from the room,
+                      // never from localStorage (WI-012). `me` is null only
+                      // during the reconnect window.
+                      Text('Challenger: ${me?.name ?? '…'}'),
+                      const Spacer(),
+                      switch (challenge.endTime) {
+                        final endTime when DateTime.now().isAfter(endTime) =>
+                          const Text('Time over!'),
+                        final endTime => Timeago(
+                            refreshRate: const Duration(seconds: 1),
+                            date: endTime.toLocal(),
+                            allowFromNow: true,
+                            builder: (context, time) {
+                              if (DateTime.now().isAfter(endTime)) {
+                                return const Text('Time over!');
+                              }
+                              return Text('"${challenge.name}" ends in $time');
+                            },
+                          ),
+                      },
+                    ],
+                  ),
                 ),
+                body: done
+                    ? _buildDone(context, challenge, me, state)
+                    : _buildLive(context, challenge, session),
               ),
-              body: done
-                  ? _buildDone(context, challenge, me, state)
-                  : _buildLive(context, challenge, session),
-            ),
             ConfettiWidget(
               confettiController: _confettiController,
               blastDirectionality: BlastDirectionality.explosive,
@@ -319,7 +332,23 @@ class _ChallengeScreenState extends State<ChallengeScreen>
     Challenge challenge,
     ({String playerId, String token, String roundId}) session,
   ) {
-    final panes = <Widget>[
+    return SplitPane(
+      axis: Axis.horizontal,
+      initialFractions: challenge.assets.isEmpty
+          ? const [0.45, 0.55]
+          : const [0.35, 0.45, 0.2],
+      children: _livePanes(challenge, session),
+    );
+  }
+
+  /// The live panes, built once and shared by both the desktop SplitPane and
+  /// the mobile PaneTabShell so the PromptEditor's ValueKey/params can't
+  /// drift between the two layouts.
+  List<Widget> _livePanes(
+    Challenge challenge,
+    ({String playerId, String token, String roundId}) session,
+  ) {
+    return <Widget>[
       _ChallengePane(widgetUrl: challenge.widgetUrl),
       PromptEditor(
         key: ValueKey('editor-${session.playerId}'),
@@ -333,13 +362,63 @@ class _ChallengeScreenState extends State<ChallengeScreen>
       ),
       if (challenge.assets.isNotEmpty) _AssetsPane(assets: challenge.assets),
     ];
+  }
 
-    return SplitPane(
-      axis: Axis.horizontal,
-      initialFractions: challenge.assets.isEmpty
-          ? const [0.45, 0.55]
-          : const [0.35, 0.45, 0.2],
-      children: panes,
+  /// LIVE phase on compact (phone) viewports: the same panes as the desktop
+  /// SplitPane ([_livePanes]) behind full-screen AppBar tabs, since three
+  /// side-by-side panes are unreadable at phone width. Open on the Prompt
+  /// tab (index 1): the challenge runs fullscreen on the conference
+  /// projector, so the challenger's own screen starts on their text field.
+  /// The shell's IndexedStack keeps every pane alive across switches —
+  /// unsynced prompt text and the challenge iframes must not be discarded.
+  /// (DONE phase stays SplitPane-only: its full-screen "Time's up!"
+  /// PointerInterceptor scrim covers the pane split, so tabs are moot there.)
+  Widget _buildMobileLive(
+    Challenge challenge,
+    ({String playerId, String token, String roundId}) session,
+  ) {
+    final panes = _livePanes(challenge, session);
+    return PaneTabShell(
+      title: _buildMobileTitle(challenge),
+      initialIndex: 1,
+      tabs: [
+        ('Challenge', panes[0]),
+        ('Prompt', panes[1]),
+        if (challenge.assets.isNotEmpty) ('Assets', panes[2]),
+      ],
+    );
+  }
+
+  /// Compact AppBar title. The desktop title Row ("Challenger: name" +
+  /// countdown) overflows at ~360 dp because an AppBar positions its title
+  /// itself and has no width of its own to wrap into (I-097), so the mobile
+  /// treatment drops the name and scale-downs the bare countdown line to one
+  /// line at a smaller base size (I-056: shrink to fit, never wrap
+  /// mid-word). It mirrors the desktop title's switch/Timeago logic inline —
+  /// deliberately not extracted, so the desktop path stays byte-identical.
+  Widget _buildMobileTitle(Challenge challenge) {
+    const style = TextStyle(fontSize: 14);
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: switch (challenge.endTime) {
+        final endTime when DateTime.now().isAfter(endTime) =>
+          const Text('Time over!', maxLines: 1, style: style),
+        final endTime => Timeago(
+            refreshRate: const Duration(seconds: 1),
+            date: endTime.toLocal(),
+            allowFromNow: true,
+            builder: (context, time) {
+              if (DateTime.now().isAfter(endTime)) {
+                return const Text('Time over!', maxLines: 1, style: style);
+              }
+              return Text(
+                '"${challenge.name}" ends in $time',
+                maxLines: 1,
+                style: style,
+              );
+            },
+          ),
+      },
     );
   }
 
