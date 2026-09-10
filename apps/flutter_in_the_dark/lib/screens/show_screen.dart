@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:confetti/confetti.dart';
+import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_in_the_dark/helpers/challenge_ticker.dart';
@@ -13,6 +14,7 @@ import 'package:flutter_in_the_dark/screens/waiting_for_challenge_screen.dart';
 import 'package:flutter_in_the_dark/widgets/challenger_content.dart';
 import 'package:flutter_in_the_dark/widgets/compiled_widget.dart';
 import 'package:flutter_in_the_dark/widgets/countdown_overlay.dart';
+import 'package:flutter_in_the_dark/widgets/show_layout.dart';
 import 'package:flutter_in_the_dark/widgets/show_overlay.dart';
 
 /// The audience screen. Renders the challenge plus one box per challenger;
@@ -222,21 +224,26 @@ class _ShowScreenState extends State<ShowScreen>
             url: '${RoomClient.compileBaseUrl}${challenge.widgetUrl}',
           );
 
+    // Composite modes lay panes out in a DRAG-RESIZABLE [SplitPane] — the
+    // same support the contestant screen has (challenge_screen uses it for
+    // Challenge | Prompt | Assets). SplitPane keeps children index-stable
+    // in its layout, so the challenge iframe and the scoreboard survive
+    // the 1 Hz ticker/SSE rebuilds and the drag resizer only relayouts.
+    // Fixed fractions reproduce the old Expanded flex proportions.
     return switch (state.show.viewMode) {
+      // The grid is the wide partner: with ~30 players the tiles need room.
       ViewMode.challengeOnly => challengePane,
-      ViewMode.allWithChallenge => Row(
-          children: [
-            Expanded(flex: 2, child: challengePane),
-            Expanded(flex: 3, child: PlayerGrid(state: state)),
-          ],
+      ViewMode.allWithChallenge => SplitPane(
+          axis: Axis.horizontal,
+          initialFractions: const [0.35, 0.65],
+          children: [challengePane, PlayerGrid(state: state)],
         ),
       ViewMode.allPlayers => PlayerGrid(state: state),
       ViewMode.singlePlayer => _buildSinglePlayer(state),
-      ViewMode.singleWithChallenge => Row(
-          children: [
-            Expanded(flex: 2, child: challengePane),
-            Expanded(flex: 3, child: _buildSinglePlayer(state)),
-          ],
+      ViewMode.singleWithChallenge => SplitPane(
+          axis: Axis.horizontal,
+          initialFractions: const [0.4, 0.6],
+          children: [challengePane, _buildSinglePlayer(state)],
         ),
     };
   }
@@ -262,6 +269,12 @@ class _ShowScreenState extends State<ShowScreen>
 }
 
 /// Responsive grid of per-challenger boxes.
+///
+/// Layout maths lives in the taint-free [PlayerTileGrid]/showPlayerGridLayout
+/// (unit-tested): columns grow with the player count and the aspect makes
+/// `ceil(n / columns)` rows tile the viewport EXACTLY, so ~30 players fill
+/// the projector without scrolling or overflowing (the old fixed 4-column
+/// switch put 8 rows of full-height cells off-screen).
 class PlayerGrid extends StatelessWidget {
   const PlayerGrid({super.key, required this.state});
 
@@ -270,41 +283,16 @@ class PlayerGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final players = state.challengers;
-    if (players.isEmpty) {
-      return const Center(
-        child: Text(
-          'Waiting for players…',
-          style: TextStyle(color: Colors.white38, fontSize: 28),
-        ),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = switch (players.length) {
-          1 => 1,
-          2 => 2,
-          <= 4 => 2,
-          <= 9 => 3,
-          _ => 4,
-        };
-        return GridView.count(
-          crossAxisCount: columns,
-          childAspectRatio: constraints.maxWidth / constraints.maxHeight,
-          padding: const EdgeInsets.all(12),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          children: [
-            for (final player in players)
-              PlayerCard(
-                key: ValueKey(player.id),
-                challenger: player,
-                content: state.contentFor(player.id),
-                autoScroll: true,
-              ),
-          ],
-        );
-      },
+    return PlayerTileGrid(
+      tiles: [
+        for (final player in players)
+          PlayerCard(
+            key: ValueKey(player.id),
+            challenger: player,
+            content: state.contentFor(player.id),
+            autoScroll: true,
+          ),
+      ],
     );
   }
 }
@@ -393,15 +381,25 @@ class _PlayerCardState extends State<PlayerCard>
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    widget.challenger.name,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: widget.expanded ? 36 : 20,
-                      fontWeight: FontWeight.bold,
+                  // I-056: the font size is a CEILING. With ~30 tiles the
+                  // header is narrow — a long name scales DOWN to fit this
+                  // line instead of overflowing the card.
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      widget.challenger.name,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: widget.expanded ? 36 : 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 _GenStateBadge(challenger: widget.challenger),
               ],
             ),

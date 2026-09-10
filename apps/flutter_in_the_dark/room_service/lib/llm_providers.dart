@@ -163,24 +163,41 @@ class DartServicesGenerator implements CodeGenerator {
   }
 
   Future<String> _streamText(http.Request request, String label) async {
+    const timeout = Duration(minutes: 3);
     final http.StreamedResponse response;
     try {
       response =
-          await _client.send(request).timeout(const Duration(minutes: 3));
+          await _client.send(request).timeout(timeout);
+      // The body read is inside the guard too: a connection that dies
+      // after the headers — dart_services' disabled-generation path
+      // answers 200 then drops the socket, and venue-grade Berget flaps
+      // do the same — raises http.ClientException, which must count as
+      // a PRIMARY failure (fallback-eligible), not a pipeline failure.
+      if (response.statusCode != 200) {
+        final body = await response.stream.bytesToString();
+        throw GenerationException(
+          name,
+          '$label HTTP ${response.statusCode}: $body',
+        );
+      }
+      // dart_services strips the fence server-side; the body is the code.
+      final text = await response.stream.bytesToString().timeout(timeout);
+      if (text.isEmpty) {
+        // A zero-byte 200 parses as a SUCCESSFUL empty generation — the
+        // disabled-generation path and some stream aborts manifest exactly
+        // this way. Empty code is never valid; treat as a primary failure.
+        throw GenerationException(name, '$label returned an empty body');
+      }
+      return text;
     } on TimeoutException {
       throw GenerationException(name, '$label: connect/stream timed out');
     } on io.SocketException catch (e) {
       throw GenerationException(name, '$label: connection failed: $e');
+    } on io.HandshakeException catch (e) {
+      throw GenerationException(name, '$label: TLS handshake failed: $e');
+    } on http.ClientException catch (e) {
+      throw GenerationException(name, '$label: transport failure: $e');
     }
-    if (response.statusCode != 200) {
-      final body = await response.stream.bytesToString();
-      throw GenerationException(
-        name,
-        '$label HTTP ${response.statusCode}: $body',
-      );
-    }
-    // dart_services strips the fence server-side; the body is the code.
-    return response.stream.bytesToString();
   }
 }
 
@@ -189,14 +206,17 @@ class DartServicesGenerator implements CodeGenerator {
 /// Non-streaming `generateContent` — the pipeline accumulates the whole body
 /// anyway, and one fewer moving part matters more than incremental display in
 /// a fallback. The model is chosen by `GEMINI_MODEL` (default
-/// `gemini-2.5-flash`: fast, cheap, good Flutter code); the Berget-style
-/// `model` override from the admin picker does NOT cross providers (a Berget
-/// model id like `moonshotai/Kimi-K3` is meaningless to Gemini).
+/// `gemini-3.6-flash`: fast, good Flutter code — `gemini-2.5-flash` 404s for
+/// NEW Google accounts, verified against the real API 2026-09-09); the
+/// Berget-style `model` override from the admin picker does NOT cross
+/// providers (a Berget model id like `moonshotai/Kimi-K3` is meaningless to
+/// Gemini).
 class GeminiGenerator implements CodeGenerator {
   GeminiGenerator({
     required this.apiKey,
     String? model,
     String? apiBase,
+    this.thinkingBudget,
     http.Client? client,
   })  : model = (model == null || model.isEmpty) ? defaultModel : model,
         apiBase = (apiBase == null || apiBase.isEmpty)
@@ -207,11 +227,31 @@ class GeminiGenerator implements CodeGenerator {
   final String apiKey;
   final String model;
 
+  /// Thinking budget for the model's internal reasoning, in tokens
+  /// (`generationConfig.thinkingConfig.thinkingBudget`). `0` was intended to
+  /// disable thinking, but the API REJECTS 0 for `gemini-3.6-flash`
+  /// (HTTP 400 INVALID_ARGUMENT, measured 2026-09-09); the lowest accepted
+  /// budget measured is 128. Default 512: at 128 generation is ~5.3s but the
+  /// thinner reasoning produced not-quite-compiling code (one auto-fix
+  /// round-trip, ~11.7s total), while 512 was ~8.4s with a FIRST-TRY
+  /// compile — fastest END-TO-END. null omits the field (model default,
+  /// ~96s raw — dominated by thinking).
+  final int? thinkingBudget;
+
   /// Overridable for tests / local fakes; production uses the real API.
   final String apiBase;
   final http.Client _client;
 
-  static const defaultModel = 'gemini-2.5-flash';
+  /// Default when `GEMINI_MODEL` is unset. `gemini-3.6-flash` as of
+  /// 2026-09-09: the API 404s `gemini-2.5-flash` for any NEW Google account
+  /// ("no longer available to new users… use models/gemini-3.6-flash"),
+  /// verified against the real API with the operator's key.
+  static const defaultModel = 'gemini-3.6-flash';
+
+  /// Sensible DEFAULT thinking budget, applied by [buildGeneratorFromEnv]
+  /// when `GEMINI_THINKING_BUDGET` is unset: measured fastest END-TO-END
+  /// (see [thinkingBudget]).
+  static const defaultThinkingBudget = 512;
 
   @override
   String get name => 'gemini';
@@ -262,6 +302,10 @@ class GeminiGenerator implements CodeGenerator {
                   ],
                 },
               ],
+              if (thinkingBudget != null)
+                'generationConfig': {
+                  'thinkingConfig': {'thinkingBudget': thinkingBudget},
+                },
             }),
           )
           .timeout(const Duration(minutes: 3));
@@ -269,6 +313,10 @@ class GeminiGenerator implements CodeGenerator {
       throw GenerationException(name, 'generateContent timed out');
     } on io.SocketException catch (e) {
       throw GenerationException(name, 'connection failed: $e');
+    } on io.HandshakeException catch (e) {
+      throw GenerationException(name, 'TLS handshake failed: $e');
+    } on http.ClientException catch (e) {
+      throw GenerationException(name, 'transport failure: $e');
     }
 
     if (response.statusCode != 200) {
@@ -471,6 +519,15 @@ class FallbackGenerator implements CodeGenerator {
 ///  * `GEMINI_API_KEY` unset → chain with no fallback (auto mode degrades to
 ///    Berget-only, and the admin route rejects forced-gemini with 409).
 ///    Set → Gemini available as fallback / forcible provider.
+///  * `GEMINI_API_URL` optional override of the Gemini REST base (same shape
+///    as `BERGET_API_URL`). Empty/unset → the real
+///    `generativelanguage.googleapis.com` endpoint; useful for rehearsal
+///    against a local mock or a corporate proxy.
+///  * `GEMINI_THINKING_BUDGET` optional thinking budget (tokens) for the
+///    Gemini model. Unset → [GeminiGenerator.defaultThinkingBudget] (512,
+///    measured fastest end-to-end). `0` requests thinking-off but the API
+///    currently rejects it for `gemini-3.6-flash` (HTTP 400).
+///
 ///
 /// A [FallbackGenerator] is returned in BOTH cases so the admin route can
 /// uniformly read/set [FallbackGenerator.mode] without a type check.
@@ -496,10 +553,21 @@ class FallbackGenerator implements CodeGenerator {
   final gemini = GeminiGenerator(
     apiKey: geminiKey,
     model: environment['GEMINI_MODEL'],
+    // Null/empty falls through to the production endpoint (see GeminiGenerator).
+    apiBase: environment['GEMINI_API_URL'],
+    // `GEMINI_THINKING_BUDGET`: '0' requests thinking-off (note: the API
+    // currently 400s this model on 0), N>0 sets the token budget, unset/
+    // invalid → [GeminiGenerator.defaultThinkingBudget] (512 — measured
+    // fastest end-to-end).
+    thinkingBudget: int.tryParse(
+          (environment['GEMINI_THINKING_BUDGET'] ?? '').trim(),
+        ) ??
+        GeminiGenerator.defaultThinkingBudget,
   );
   return (
     generator: FallbackGenerator(primary: primary, fallback: gemini),
     providersDescription:
-        'berget via dart_services PRIMARY, gemini (${gemini.model}) FALLBACK',
+        'berget via dart_services PRIMARY, '
+        'gemini (${gemini.model}, thinking=${gemini.thinkingBudget}) FALLBACK',
   );
 }

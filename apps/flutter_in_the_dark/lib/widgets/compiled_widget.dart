@@ -9,6 +9,14 @@ import 'package:web/web.dart' as web;
 ///
 /// Also used for pre-compiled challenge widgets (§6.F) — same serving path.
 ///
+/// The SAME iframe element is kept across updates: [didUpdateWidget] swaps
+/// `_iframe.src` when the url changes instead of remounting (which would
+/// re-register a platform view and flash blank). This is what makes
+/// /show's single-competitor switch actually swap the compiled app: the
+/// pane stays in the same tree position while only the focused competitor
+/// changes, so a url captured in initState alone would keep rendering the
+/// PREVIOUS competitor's frame forever.
+///
 /// Runtime errors from the frame arrive as postMessage
 /// `{sender:'fitd-frame', type:'jserr'|'stderr'|'stdout', message}` and are
 /// surfaced through [onError].
@@ -61,6 +69,18 @@ class _CompiledWidgetState extends State<CompiledWidget> {
       }
     }).toJS;
     web.window.addEventListener('message', _messageHandler!);
+  }
+
+  @override
+  void didUpdateWidget(CompiledWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The iframe captured `widget.url` in initState; without this, ANY
+    // parent rebuild keeps showing the old app (the view type is stable,
+    // so the platform view survives). Only touch src when it actually
+    // changed — the browser navigates the existing frame to the new app.
+    if (widget.url != oldWidget.url) {
+      _iframe.src = widget.url;
+    }
   }
 
   @override
