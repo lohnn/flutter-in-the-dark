@@ -189,6 +189,13 @@ no DNS A record to the house IP, no ACME. Set it up once:
    end-to-end 2026-09-09; lower = faster generation but riskier compile;
    `0` requests thinking-off but the API currently 400s it for
    `gemini-3.6-flash`).
+
+   > TLS note: the room image ships `ca-certificates` (its only direct HTTPS
+   > egress is the Gemini API; Berget/compile ride plain HTTP to
+   > dart-services in-cluster). If a venue network TLS-intercepts outbound
+   > HTTPS, keep verification ON and mount the interceptor's root CA, then
+   > set `SSL_CERT_FILE=/path/ca.pem` in the room service's `environment:` —
+   > never disable certificate verification.
 6. **Tailscale** (the /admin gate — **independent of Cloudflare**, unchanged):
    - Get the host's tailnet IPv4: `export TAILSCALE_IP=$(tailscale ip -4)`.
    - Enable HTTPS certs in the tailnet admin console (DNS → HTTPS
