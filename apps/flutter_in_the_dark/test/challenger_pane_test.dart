@@ -169,6 +169,72 @@ void main() {
     expect(find.text('dart2js exploded'), findsOneWidget);
   });
 
+  testWidgets('failed pane never overflows a scoreboard-content strip', (
+    tester,
+  ) async {
+    // The 100-player wall gives each tile's content a ~24 px strip; the
+    // failed pane's fixed-ish assembly must scale down INSIDE the strip,
+    // not paint over the neighbouring tiles.
+    final requests = <String>[];
+    final a = _challenger(
+      id: 'a',
+      name: 'A',
+      genState: GenState.failed,
+      error: 'boom',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 24,
+            child: ChallengerPane(
+              challenger: a,
+              content: DisplayContent.code,
+              widgetViewBuilder: (path) {
+                requests.add(path);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Generation failed'), findsOneWidget);
+  });
+
+  testWidgets('loading states never overflow a scoreboard-content strip', (
+    tester,
+  ) async {
+    // Same fence for the Code/Widget reveal with the pipeline still idle:
+    // the loader must scale into the strip (see plasma_loader_test).
+    final requests = <String>[];
+    final a = _challenger(id: 'a', name: 'A');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 24,
+            child: ChallengerPane(
+              challenger: a,
+              content: DisplayContent.code,
+              widgetViewBuilder: (path) {
+                requests.add(path);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Waiting…'), findsOneWidget);
+  });
+
   testWidgets('empty prompt shows the thinking placeholder', (tester) async {
     final requests = <String>[];
     final a = _challenger(id: 'a', name: 'A');
