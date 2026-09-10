@@ -26,6 +26,7 @@ class ChallengerContent extends StatelessWidget {
     required this.content,
     this.expanded = false,
     this.autoScroll = false,
+    this.interactable = true,
   });
 
   final Challenger challenger;
@@ -39,6 +40,13 @@ class ChallengerContent extends StatelessWidget {
   /// interactive screens (the contestant's own view) keep manual control.
   final bool autoScroll;
 
+  /// Passed to the injected [CompiledWidget]: false makes the iframe
+  /// `pointer-events: none` so it cannot grab mouse/wheel events from the
+  /// projector screen's gestures (SplitPane divider drags, GridView
+  /// scrolling). Default true — the contestant's own preview stays
+  /// interactive.
+  final bool interactable;
+
   @override
   Widget build(BuildContext context) {
     return ChallengerPane(
@@ -48,6 +56,7 @@ class ChallengerContent extends StatelessWidget {
       autoScroll: autoScroll,
       widgetViewBuilder: (compiledPath) => CompiledWidget(
         url: '${RoomClient.compileBaseUrl}$compiledPath',
+        interactable: interactable,
       ),
     );
   }

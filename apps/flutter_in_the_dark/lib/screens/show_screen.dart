@@ -213,6 +213,11 @@ class _ShowScreenState extends State<ShowScreen>
 
   Widget _buildBody(RoomState state) {
     final challenge = state.challenge!;
+    // The /show panes are a projector wall — NOTHING here is meant to take
+    // pointer input, and an interactive iframe would eat the browser events
+    // the SplitPane divider needs (dragging the divider over the challenge
+    // frame would freeze: iframe documents swallow parent-window pointer
+    // events). pointer-events:none on the iframe fixes the DOM level.
     final challengePane = challenge.widgetUrl.isEmpty
         ? const Center(
             child: Text(
@@ -222,6 +227,7 @@ class _ShowScreenState extends State<ShowScreen>
           )
         : CompiledWidget(
             url: '${RoomClient.compileBaseUrl}${challenge.widgetUrl}',
+            interactable: false,
           );
 
     // Composite modes lay panes out in a DRAG-RESIZABLE [SplitPane] — the
@@ -264,6 +270,10 @@ class _ShowScreenState extends State<ShowScreen>
       content: state.contentFor(player.id),
       expanded: true,
       autoScroll: true,
+      // Projector wall: never let the focused player's compiled widget
+      // capture the pointer (same SplitPane/canvas-drive rationale as the
+      // challenge pane above).
+      interactable: false,
     );
   }
 }
@@ -271,10 +281,12 @@ class _ShowScreenState extends State<ShowScreen>
 /// Responsive grid of per-challenger boxes.
 ///
 /// Layout maths lives in the taint-free [PlayerTileGrid]/showPlayerGridLayout
-/// (unit-tested): columns grow with the player count and the aspect makes
-/// `ceil(n / columns)` rows tile the viewport EXACTLY, so ~30 players fill
-/// the projector without scrolling or overflowing (the old fixed 4-column
-/// switch put 8 rows of full-height cells off-screen).
+/// (unit-tested): tiles keep a mild portrait shape (height/width 1.2) at
+/// every count and pack as LARGE as the viewport allows — up to 36 players
+/// fill a 1080p projector in one screen (bottom leftover instead of
+/// stretched rows); past that, tiles hold their 200-wide floor and the
+/// wall scrolls (the old fixed 4-column switch put 8 rows of full-height
+/// cells off-screen).
 class PlayerGrid extends StatelessWidget {
   const PlayerGrid({super.key, required this.state});
 
@@ -291,6 +303,10 @@ class PlayerGrid extends StatelessWidget {
             challenger: player,
             content: state.contentFor(player.id),
             autoScroll: true,
+            // Projector wall: never let a tile's compiled widget grab the
+            // mouse/wheel — a live tile would otherwise swallow the wheel
+            // scrolling that a >threshold wall (81+ players on 1080p) needs.
+            interactable: false,
           ),
       ],
     );
@@ -306,6 +322,7 @@ class PlayerCard extends StatefulWidget {
     required this.content,
     this.expanded = false,
     this.autoScroll = false,
+    this.interactable = true,
   });
 
   final Challenger challenger;
@@ -315,6 +332,12 @@ class PlayerCard extends StatefulWidget {
   /// Passed through to [ChallengerContent] so the projector view's code
   /// panes scroll themselves — the presenter cannot touch the screen.
   final bool autoScroll;
+
+  /// Passed through to the tile's [CompiledWidget]: false makes the iframe
+  /// `pointer-events: none` so it cannot grab browser pointer events on the
+  /// projector wall. Default true (the contestant's own card stays
+  /// interactive).
+  final bool interactable;
 
   @override
   State<PlayerCard> createState() => _PlayerCardState();
@@ -410,6 +433,7 @@ class _PlayerCardState extends State<PlayerCard>
               content: widget.content,
               expanded: widget.expanded,
               autoScroll: widget.autoScroll,
+              interactable: widget.interactable,
             ),
           ),
         ],

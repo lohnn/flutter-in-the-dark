@@ -55,10 +55,10 @@ class ChallengerPane extends StatelessWidget {
         ),
       DisplayContent.code => _readyOrLoading(
           () => CodePane(
-                code: challenger.generatedCode ?? '',
-                fontSize: fontSize,
-                autoScroll: autoScroll,
-              ),
+            code: challenger.generatedCode ?? '',
+            fontSize: fontSize,
+            autoScroll: autoScroll,
+          ),
         ),
       DisplayContent.widget => _readyOrLoading(
           () {
@@ -130,27 +130,38 @@ class _FailedPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Scale-down fence, same rationale as PlasmaLoader: this fixed-ish
+    // assembly (~102 px intrinsic) used to overflow and paint over
+    // neighbouring tiles inside the packed /show scoreboard's short
+    // content strips. scaleDown keeps it 1:1 wherever there is room.
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.redAccent, size: 40),
-            const SizedBox(height: 12),
-            const Text(
-              'Generation failed',
-              style: TextStyle(color: Colors.redAccent, fontSize: 18),
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white38, fontSize: 12),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.redAccent,
+                size: 40,
               ),
+              const SizedBox(height: 12),
+              const Text(
+                'Generation failed',
+                style: TextStyle(color: Colors.redAccent, fontSize: 18),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

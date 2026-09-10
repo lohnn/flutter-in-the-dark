@@ -36,23 +36,34 @@ class _PlasmaLoaderState extends State<PlasmaLoader>
 
   @override
   Widget build(BuildContext context) {
+    // Scale-down fence: the plasma assembly has a fixed intrinsic size
+    // (~161 px tall: 120 px paint + 20 gap + caption). Inside tight boxes —
+    // e.g. the /show scoreboard's ~24–75 px content strips at 60–100
+    // players — the old fixed-size Column overflowed its tile and PAINTED
+    // over the neighbouring tiles (nothing clips platform-adjacent paints
+    // in release). FittedBox scaleDown keeps the 1:1 render whenever the
+    // box is big enough and shrinks the whole blob+caption into any strip
+    // that isn't, so the loader can never escape its tile at any count.
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) => CustomPaint(
-              size: const Size(120, 120),
-              painter: _PlasmaPainter(t: _controller.value),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) => CustomPaint(
+                size: const Size(120, 120),
+                painter: _PlasmaPainter(t: _controller.value),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            widget.label,
-            style: const TextStyle(color: Colors.white54, fontSize: 16),
-          ),
-        ],
+            const SizedBox(height: 20),
+            Text(
+              widget.label,
+              style: const TextStyle(color: Colors.white54, fontSize: 16),
+            ),
+          ],
+        ),
       ),
     );
   }

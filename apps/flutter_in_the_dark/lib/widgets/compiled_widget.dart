@@ -20,12 +20,35 @@ import 'package:web/web.dart' as web;
 /// Runtime errors from the frame arrive as postMessage
 /// `{sender:'fitd-frame', type:'jserr'|'stderr'|'stdout', message}` and are
 /// surfaced through [onError].
+///
+/// [interactable] — an iframe document grabs browser pointer events at the
+/// DOM level: a mouse press/move/wheel over the frame dispatches INTO the
+/// frame's document and never reaches the parent window's listeners, so
+/// Flutter gestures that cross the frame (dragging a [SplitPane] divider
+/// across it; wheel-scrolling a GridView behind it) silently freeze. Flutter
+/// hit-testing cannot help — IgnorePointer never sees the events.
+/// /show (a projector wall nobody may touch) therefore passes
+/// `interactable: false`, which sets `pointer-events: none` on the iframe
+/// element itself: the frame still renders and still receives programmatic
+/// events, but the browser routes all pointer input to the app underneath.
+/// Defaults to true — the player's own preview keeps mouse/keyboard focus
+/// and interactivity for editing/scrolling its contents.
 class CompiledWidget extends StatefulWidget {
-  const CompiledWidget({super.key, required this.url, this.onError});
+  const CompiledWidget({
+    super.key,
+    required this.url,
+    this.interactable = true,
+    this.onError,
+  });
 
   /// Full URL of the compiled app (path-absolute `url` from compileAndServe
   /// resolved against the generation backend).
   final String url;
+
+  /// Whether the frame may receive browser pointer events. False sets
+  /// `pointer-events: none` on the iframe (the only reliable switch on web —
+  /// see the class comment). Default keeps the frame interactive.
+  final bool interactable;
 
   final void Function(String message)? onError;
 
@@ -50,6 +73,7 @@ class _CompiledWidgetState extends State<CompiledWidget> {
       ..style.width = '100%'
       ..style.height = '100%'
       ..allow = 'autoplay';
+    _applyInteractable();
 
     // ignore: undefined_prefixed_name
     ui.platformViewRegistry.registerViewFactory(
@@ -81,6 +105,15 @@ class _CompiledWidgetState extends State<CompiledWidget> {
     if (widget.url != oldWidget.url) {
       _iframe.src = widget.url;
     }
+    if (widget.interactable != oldWidget.interactable) {
+      _applyInteractable();
+    }
+  }
+
+  /// The DOM-level switch for [CompiledWidget.interactable]. An empty string
+  /// clears the inline style and restores the browser default (interactive).
+  void _applyInteractable() {
+    _iframe.style.pointerEvents = widget.interactable ? '' : 'none';
   }
 
   @override
