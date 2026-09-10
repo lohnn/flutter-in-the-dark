@@ -172,7 +172,24 @@ no DNS A record to the house IP, no ACME. Set it up once:
    ```
    Optional keys in the same file: `BERGET_MODEL` (default
    `openai/gpt-oss-120b`), `BERGET_API_URL` (default `https://api.berget.ai`).
-5. **Tailscale** (the /admin gate — **independent of Cloudflare**, unchanged):
+5. **Room service secrets file** — create `deploy/env/room.env` from
+   `deploy/env/room.env.example` and set `GEMINI_API_KEY` (a Google AI
+   Studio key with the Generative Language API enabled). Without it the
+   room boots Berget-only and the admin provider picker reports Gemini
+   unavailable — a missing key here is the classic "Gemini does not work"
+   failure. Verify blind, as above:
+   ```bash
+   [ -f deploy/env/room.env ] && echo exists
+   grep -q '^GEMINI_API_KEY=' deploy/env/room.env && echo key-present
+   chmod 600 deploy/env/room.env
+   ```
+   Optional keys in the same file: `GEMINI_MODEL` (default `gemini-3.6-flash`
+   — set only to override; `gemini-2.5-flash` 404s for NEW Google accounts)
+   and `GEMINI_THINKING_BUDGET` (default `512` tokens — measured fastest
+   end-to-end 2026-09-09; lower = faster generation but riskier compile;
+   `0` requests thinking-off but the API currently 400s it for
+   `gemini-3.6-flash`).
+6. **Tailscale** (the /admin gate — **independent of Cloudflare**, unchanged):
    - Get the host's tailnet IPv4: `export TAILSCALE_IP=$(tailscale ip -4)`.
    - Enable HTTPS certs in the tailnet admin console (DNS → HTTPS
      Certificates), then issue the machine cert:
@@ -184,13 +201,13 @@ no DNS A record to the house IP, no ACME. Set it up once:
      ```
      (`deploy/traefik/tls.yml` reads `/certs/tailscale.{crt,key}`; the host
      dir is overridable via `TAILSCALE_CERT_DIR`.)
-6. **Environment** — in `.env` next to `docker-compose.yml` (or exported).
+7. **Environment** — in `.env` next to `docker-compose.yml` (or exported).
    Note: **no `ACME_EMAIL`** anymore (no ACME):
    ```
    DOMAIN=backend.flutterinthedark.dev      # the API host
    APP_DOMAIN=flutterinthedark.dev          # the apex — serves the app SPA
    TAILNET_DOMAIN=<machine>.<tailnet>.ts.net
-   TAILSCALE_IP=<100.x from step 5>
+   TAILSCALE_IP=<100.x from step 6>
    # optional overrides:
    # BERGET_MODEL=openai/gpt-oss-120b
    # DART_PAD_PATH=../dart-pad      (where the berget-backend checkout lives)

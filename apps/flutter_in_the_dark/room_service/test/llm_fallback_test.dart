@@ -5,6 +5,9 @@
 /// buildGeneratorFromEnv.
 library;
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_in_the_dark_room_service/llm_providers.dart';
 import 'package:test/test.dart';
 
@@ -310,6 +313,209 @@ void main() {
         (result.generator.fallback as GeminiGenerator).model,
         'gemini-3.6-flash',
       );
+    });
+
+    test('GEMINI_API_URL overrides the fallback apiBase', () {
+      final result = buildGeneratorFromEnv(
+        backendBase: 'http://unused',
+        env: const {
+          'GEMINI_API_KEY': 'test-key',
+          'GEMINI_API_URL': 'http://127.0.0.1:8309',
+        },
+      );
+      expect(
+        (result.generator.fallback as GeminiGenerator).apiBase,
+        'http://127.0.0.1:8309',
+      );
+    });
+
+    test('GEMINI_API_URL empty → production endpoint', () {
+      final result = buildGeneratorFromEnv(
+        backendBase: 'http://unused',
+        env: const {
+          'GEMINI_API_KEY': 'test-key',
+          'GEMINI_API_URL': '',
+        },
+      );
+      expect(
+        (result.generator.fallback as GeminiGenerator).apiBase,
+        'https://generativelanguage.googleapis.com/v1beta',
+      );
+    });
+  });
+
+  group('DartServicesGenerator transport failures', () {
+    // dart_services' disabled-generation path answers HTTP 200 then throws
+    // asynchronously, dropping the socket before full headers — observed
+    // live as `Empty reply from server`. The primary must translate that
+    // into a GenerationException so the fallback chain engages.
+    Future<ServerSocket> bindDropper() async {
+      final server = await ServerSocket.bind('127.0.0.1', 0);
+      server.listen((client) {
+        // Accept and destroy with no bytes: the observed
+        // "empty reply from server" / ClientException case.
+        client.destroy();
+      });
+      return server;
+    }
+
+    Future<HttpServer> bindEmptyBodyServer() async {
+      final server = await HttpServer.bind('127.0.0.1', 0);
+      server.listen((request) async {
+        await request.drain<void>();
+        await request.response.close(); // <body> = empty
+      });
+      return server;
+    }
+
+    test('connection closed with no bytes becomes a fallback trigger',
+        () async {
+      final dropper = await bindDropper();
+      final primary = DartServicesGenerator(
+        backendBase: 'http://127.0.0.1:${dropper.port}',
+      );
+      final chain = FallbackGenerator(
+        primary: primary,
+        fallback: FakeGenerator('fallback', ['gemini-code']),
+      );
+
+      final result = await chain.generateCode(prompt: 'p', model: 'm');
+
+      expect(result, 'gemini-code',
+          reason: 'an empty-reply primary must NOT bypass the fallback');
+      await dropper.close();
+    });
+
+    test('200 with an empty body becomes a fallback trigger', () async {
+      final emptier = await bindEmptyBodyServer();
+      final primary = DartServicesGenerator(
+        backendBase: 'http://127.0.0.1:${emptier.port}',
+      );
+      final chain = FallbackGenerator(
+        primary: primary,
+        fallback: FakeGenerator('fallback', ['gemini-code']),
+      );
+
+      final result = await chain.generateCode(prompt: 'p', model: 'm');
+
+      expect(result, 'gemini-code',
+          reason: 'a 0-byte 200 parses as success — must be treated as '
+              'an empty, invalid generation');
+      await emptier.close(force: true);
+    });
+
+    test('connection refused becomes a fallback trigger', () async {
+      final socket = await ServerSocket.bind('127.0.0.1', 0);
+      final port = socket.port;
+      await socket.close();
+      // Nothing listens on [port] any more (closed ephemeral socket):
+      // connecting there is refused (SocketException path).
+      final primary =
+          DartServicesGenerator(backendBase: 'http://127.0.0.1:$port');
+      final chain = FallbackGenerator(
+        primary: primary,
+        fallback: FakeGenerator('fallback', ['gemini-code']),
+      );
+
+      final result = await chain.generateCode(prompt: 'p', model: 'm');
+
+      expect(result, 'gemini-code');
+    });
+  });
+
+  group('GeminiGenerator thinkingConfig payload', () {
+    // Captures the generateContent request bodies so tests can assert the
+    // generationConfig.thinkingConfig contract without the real API.
+    // Lists (not strings) so the record holds a LIVE reference — the server
+    // fills them only once a request arrives.
+    Future<
+        (
+          HttpServer server,
+          List<String> paths,
+          List<String> bodies,
+        )> bindCapture() async {
+      final paths = <String>[];
+      final bodies = <String>[];
+      final server = await HttpServer.bind('127.0.0.1', 0);
+      server.listen((request) async {
+        paths.add(request.uri.path);
+        bodies.add(await utf8.decoder.bind(request).join());
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          '{"candidates":[{"content":{"parts":[{"text":"```dart'
+          '\\nvoid main() {}\\n```"}]}}]}',
+        );
+        await request.response.close();
+      });
+      return (server, paths, bodies);
+    }
+
+    test('thinkingBudget set → generationConfig.thinkingConfig sent', () async {
+      final (server, _, bodies) = await bindCapture();
+      final gemini = GeminiGenerator(
+        apiKey: 'test-key',
+        apiBase: 'http://127.0.0.1:${server.port}',
+        thinkingBudget: 0,
+      );
+      await gemini.generateCode(prompt: 'p', model: 'm');
+      expect(bodies, hasLength(1));
+
+      final body = jsonDecode(bodies.single) as Map<String, dynamic>;
+      final genCfg = body['generationConfig'] as Map<String, dynamic>?;
+      expect(genCfg, isNotNull,
+          reason: 'an explicit thinkingBudget must reach the wire');
+      expect(
+        (genCfg!['thinkingConfig'] as Map<String, dynamic>)['thinkingBudget'],
+        0,
+      );
+      await server.close(force: true);
+    });
+
+    test('thinkingBudget null → no thinkingConfig in payload', () async {
+      final (server, _, bodies) = await bindCapture();
+      final gemini = GeminiGenerator(
+        apiKey: 'test-key',
+        apiBase: 'http://127.0.0.1:${server.port}',
+      );
+      await gemini.generateCode(prompt: 'p', model: 'm');
+      expect(bodies, hasLength(1));
+
+      final body = jsonDecode(bodies.single) as Map<String, dynamic>;
+      expect(body.containsKey('generationConfig'), isFalse,
+          reason: 'unset knob must omit the field (model default applies)');
+      await server.close(force: true);
+    });
+
+    test('GEMINI_THINKING_BUDGET: explicit values win, absence → 512', () {
+      final set = buildGeneratorFromEnv(
+        backendBase: 'http://unused',
+        env: const {'GEMINI_API_KEY': 'k', 'GEMINI_THINKING_BUDGET': '512'},
+      );
+      expect((set.generator.fallback as GeminiGenerator).thinkingBudget, 512);
+
+      final zero = buildGeneratorFromEnv(
+        backendBase: 'http://unused',
+        env: const {'GEMINI_API_KEY': 'k', 'GEMINI_THINKING_BUDGET': '0'},
+      );
+      expect((zero.generator.fallback as GeminiGenerator).thinkingBudget, 0,
+          reason: 'explicit operator intent is honored even though the API '
+              'currently 400s this model on 0');
+
+      final absent = buildGeneratorFromEnv(
+        backendBase: 'http://unused',
+        env: const {'GEMINI_API_KEY': 'k'},
+      );
+      expect((absent.generator.fallback as GeminiGenerator).thinkingBudget, 512,
+          reason:
+              'absence → GemGenerator.defaultThinkingBudget (measured fastest '
+              'end-to-end)');
+
+      final junk = buildGeneratorFromEnv(
+        backendBase: 'http://unused',
+        env: const {'GEMINI_API_KEY': 'k', 'GEMINI_THINKING_BUDGET': 'lots'},
+      );
+      expect((junk.generator.fallback as GeminiGenerator).thinkingBudget, 512,
+          reason: 'unparseable → same measured default, never null');
     });
   });
 }
