@@ -7,54 +7,64 @@ import 'package:flutter/material.dart';
 /// run under `flutter test`; this file imports ONLY material and takes
 /// plain values). Pure function + taint-free shell widget.
 
-/// Target width/height for a scoreboard tile at large player counts. The
-/// packing below lands close to it: wide enough to read a name, tall
-/// enough for a glimpse of the content.
-const double _targetTileAspect = 1.4;
-
-/// Ceiling on columns so extreme counts still produce readable tiles; the
-/// exact-tiling aspect keeps the grid fitting (no scrolling) up to
-/// [_maxColumns] * [_maxColumns] tiles.
-const int _maxColumns = 8;
-
-/// Minimum scoreboard tile size (2026-09-10, measured on the 1920×1080
-/// projector capture at 100 players — 227×70 tiles):
+/// Target scoreboard tile SHAPE: height per width (2026-09-10, per the
+/// presenter's ask — "all slightly taller, not fully mobile, but somewhat
+/// in that direction"). 1.2 reads as a mild portrait card (~10×12) —
+/// clearly taller than the wide ~3:2–3:1 slabs this replaced, well short of
+/// phone-strip. The single knob to retune the whole wall's look:
+/// raising it (→1.3+) grows scroll onset below the ~30-player show norm;
+/// lowering it (→1.0) reads square.
 ///
-///  - Height 90 = the ~46 px name header (20 pt line + vertical padding)
-///    plus ~44 px of content, enough to render the "Thinking in the
-///    dark…" placeholder or one prompt line unclipped. Below the header
-///    crowds out the content entirely.
-///  - Width 220 = the name box (220 − 32 card padding − ~52 writing badge
-///    − 8 gap ≈ 128 px) keeps ≤ ~11-character names UNSCALED at the 20 pt
-///    ceiling; narrower tiles push the FittedBox (which has no floor)
-///    toward single-digit, unreadable text.
-///
-/// When even the minimum no longer tiles the viewport, [PlayerTileGrid]
-/// holds the minimum and the GridView SCROLLS (e.g. a full-width 1080p
-/// wall fits 10 rows of 90 px rooms → scrolling starts at 81 players).
-const double _minTileWidth = 220;
-const double _minTileHeight = 90;
+/// NOTE (accepted cost, deliberate): a fixed shape means the grid can no
+/// longer stretch tile HEIGHT to squeeze every row onto one screen. Big
+/// fields scroll — e.g. 1080p shows 4 of 12 rows at 100 players. Shape
+/// beats see-everyone; that trade was chosen explicitly.
+const double _tileAspect = 1.2;
+
+/// Width floor for a scoreboard tile: the name-legibility budget (200 −
+/// 32 card padding − ~52 writing badge − 8 gap ≈ 108 px name box keeps
+/// 20 pt names at worst ~0.85 FittedBox scale — a mild, imperceptible
+/// shrink; the old 220 floor bought "never scaled" at the cost of a whole
+/// column and a 30-player scroll). Anything narrower turns names into
+/// confetti.
+const double _minTileWidth = 200;
+
+/// Height floor, DERIVED from the shape: a tile at the width floor with
+/// the [tileAspect] shape. (Supersedes the wide-slab-era fixed 90 — that
+/// floor existed because heights used to shrink independently of widths;
+/// with a fixed shape they never do.) Exposed as a constant only so tests
+/// and docs quote the same number the packing uses.
+const double _minTileHeight = _minTileWidth * _tileAspect;
+
+/// Safety ceiling on columns. The BINDING limit is the width floor's
+/// derate (⌊(width+spacing)/(min+spacing)⌋ — 9 columns on a 1920 wall at
+/// the 200 floor); this cap only matters on very large walls (3+ K), where
+/// 12 keeps tiles from re-entering slab territory. (Was 8 — a wide-slab
+/// artifact that would have throttled the 9th portrait column on 1080p.)
+const int _maxColumns = 12;
 
 /// How a grid of [playerCount] tiles fills a content area of [width] ×
 /// [height] (already EXCLUDING the grid padding, but INCLUSIVE of tile
 /// [spacing]).
 ///
 /// Returns the column count, the GridView `childAspectRatio`, and whether
-/// the grid must scroll:
+/// the grid must scroll.
 ///
-///  - Small fields: `ceil(playerCount / columns)` rows tile the area
-///    EXACTLY at the sqrt-estimate columns (no scroll, no overflow) —
-///    byte-for-byte the algorithm this replaced, so ≤threshold layouts
-///    are pixel-identical.
-///  - When exact-fill would shrink a tile below [_minTileWidth] or
-///    [_minTileHeight], the packing stops shrinking instead: columns are
-///    reduced to the width minimum, cell height is floored at
-///    [_minTileHeight], and `scrolls` reports that the GridView must
-///    scroll (rows × (min + spacing) now exceed the viewport).
+/// ASPECT-DRIVEN MAX-TILE PACKING (2026-09-10 design; supersedes the
+/// exact-fill packing that stretched/shrunk tile heights to make rows fit):
 ///
-/// The old fixed-switch layout picked 4 columns for any count > 9, so
-/// ~30 players produced 8 rows that scrolled off the projector (cells
-/// sized from the full-height aspect).
+///  - Tiles keep the [_tileAspect] shape at every count. Column count is
+///    the FEWEST columns whose aspect-shaped rows fit the height — tile
+///    size shrinks as columns grow, so the first fitting count is the
+///    LARGEST-tile fit. `ceil(n/columns)` rows × (cellWidth·aspect) may
+///    leave bottom leftover height, and the last row may have empty slots:
+///    both are preferred over distorting the tile shape.
+///  - When NO column count (up to the width-floor derate) fits the height,
+///    packing HOLDS THE FLOOR: full width at the derated maximum columns
+///    (cellWidth ≥ [_minTileWidth], cellHeight = cellWidth·aspect ≥
+///    [_minTileHeight]) and `scrolls` reports that the GridView scrolls.
+///  - Single player stays fullscreen (the detail view; minimums are for
+///    the wall).
 ///
 /// Kept pure for unit tests — call it from a LayoutBuilder with measured
 /// values (see [PlayerTileGrid]).
@@ -68,69 +78,59 @@ const double _minTileHeight = 90;
   if (playerCount <= 0 || width <= 0 || height <= 0) {
     return (columns: 1, childAspectRatio: 1, scrolls: false);
   }
-  final viewportAspect = width / height;
   if (playerCount == 1) {
     // A single player IS the detail view — fullscreen by design; the
-    // minimums exist for the scoreboard wall, not for it.
-    return (columns: 1, childAspectRatio: viewportAspect, scrolls: false);
+    // minimums and the shape exist for the scoreboard wall, not for it.
+    return (columns: 1, childAspectRatio: width / height, scrolls: false);
   }
 
-  // columns ≈ sqrt(n · viewportAspect / targetAspect): the classic
-  // even-packing estimate — it reproduces the old choice for the small
-  // square-ish counts (1→1, 2→2, 4→2, 9→3) and grows with the count
-  // instead of capping at 4.
-  final candidate = math
-      .sqrt(playerCount * viewportAspect / _targetTileAspect)
-      .round()
-      .clamp(1, _maxColumns);
+  // Width floor's derate: the most columns that keep tiles ≥
+  // [_minTileWidth] while filling the width, plus the safety ceiling.
+  final maxColumns =
+      ((width + spacing) / (_minTileWidth + spacing)).floor().clamp(
+            1,
+            _maxColumns,
+          );
 
-  final rows = (playerCount / candidate).ceil();
-
-  // Solve aspect so cellWidth/cellHeight makes rows·cellHeight == height
-  // exactly (spacing both between tiles and inside the solved size):
-  final exactCellWidth = (width - (candidate - 1) * spacing) / candidate;
-  final exactCellHeight = (height - (rows - 1) * spacing) / rows;
-
-  // PASS 1 — everything fits at the legacy exact-fill packing: return it
-  // untouched, so small/medium fields render pixel-identical to before.
-  if (exactCellWidth >= _minTileWidth && exactCellHeight >= _minTileHeight) {
-    return (
-      columns: candidate,
-      childAspectRatio: exactCellWidth / exactCellHeight,
-      scrolls: false,
-    );
+  // Max-tile search: tile size shrinks monotonically with the column
+  // count (aspect fixes height to width), so the fewest columns whose
+  // rows fit the height is the largest-tile fit.
+  for (var columns = 1; columns <= maxColumns; columns++) {
+    final cellWidth = (width - (columns - 1) * spacing) / columns;
+    final cellHeight = cellWidth * _tileAspect;
+    final rows = (playerCount / columns).ceil();
+    final gridHeight = rows * cellHeight + (rows - 1) * spacing;
+    if (gridHeight <= height + 0.01) {
+      return (
+        columns: columns,
+        childAspectRatio: cellWidth / cellHeight, // == 1 / _tileAspect
+        scrolls: false,
+      );
+    }
   }
 
-  // PASS 2 — the minimums bind: stop shrinking. Columns yield to the
-  // width minimum first (wider tiles), and the cell height is floored so
-  // the header + one content line always render; the grid scrolls.
-  final byWidth = ((width + spacing) / (_minTileWidth + spacing))
-      .floor()
-      .clamp(1, _maxColumns);
-  final columns = math.min(candidate, byWidth);
-  final scrollRows = (playerCount / columns).ceil();
+  // No column count keeps the shape and fits the height: hold the floor.
+  // Full width at the derated maximum columns — cells stay ≥ the minimums
+  // by construction — and the GridView scrolls.
+  final columns = maxColumns;
   final cellWidth = (width - (columns - 1) * spacing) / columns;
-  final cellHeight = math.max(
-    _minTileHeight,
-    (height - (scrollRows - 1) * spacing) / scrollRows,
-  );
-  final gridHeight = scrollRows * cellHeight + (scrollRows - 1) * spacing;
   return (
     columns: columns,
-    childAspectRatio: cellWidth / cellHeight,
-    scrolls: gridHeight > height + 0.01,
+    childAspectRatio: cellWidth / (cellWidth * _tileAspect),
+    scrolls: true,
   );
 }
 
-/// The /show scoreboard: an exact-tiling grid of per-challenger tiles
+/// The /show scoreboard: an aspect-shaped grid of per-challenger tiles
 /// (see [showPlayerGridLayout] for the maths).
 ///
-/// When the packing reports `scrolls` (tiles floored at the minimum size —
-/// 220×90 — no longer tile the viewport, empirically 81+ players on a
-/// full-width 1080p wall), this GridView simply scrolls: it always fills
-/// its parent box already, so no structural change is needed, and the
-/// tiles keep the readable minimum instead of shrinking into
-/// name-commands-nothing strips.
+/// Tiles keep a mild portrait shape (height/width 1.2) at every count.
+/// When the packing reports `scrolls` (tiles at the 200-wide floor no
+/// longer tile the viewport — 37+ players on a full-width 1080p wall),
+/// this GridView simply scrolls: it always fills its parent box already,
+/// so no structural change is needed, and tiles keep their shape and
+/// minimum instead of shrinking into unseeable slivers. Below that,
+/// bigger fields simply leave bottom/leftover space rather than distort.
 ///
 /// Taint-free shell in the PaneTabShell style (I-117/I-022): tiles are
 /// built by the CALLER and passed in, so the tainted /show screen builds

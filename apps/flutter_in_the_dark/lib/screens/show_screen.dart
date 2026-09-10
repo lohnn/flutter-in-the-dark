@@ -281,10 +281,12 @@ class _ShowScreenState extends State<ShowScreen>
 /// Responsive grid of per-challenger boxes.
 ///
 /// Layout maths lives in the taint-free [PlayerTileGrid]/showPlayerGridLayout
-/// (unit-tested): columns grow with the player count and the aspect makes
-/// `ceil(n / columns)` rows tile the viewport EXACTLY, so ~30 players fill
-/// the projector without scrolling or overflowing (the old fixed 4-column
-/// switch put 8 rows of full-height cells off-screen).
+/// (unit-tested): tiles keep a mild portrait shape (height/width 1.2) at
+/// every count and pack as LARGE as the viewport allows — up to 36 players
+/// fill a 1080p projector in one screen (bottom leftover instead of
+/// stretched rows); past that, tiles hold their 200-wide floor and the
+/// wall scrolls (the old fixed 4-column switch put 8 rows of full-height
+/// cells off-screen).
 class PlayerGrid extends StatelessWidget {
   const PlayerGrid({super.key, required this.state});
 
