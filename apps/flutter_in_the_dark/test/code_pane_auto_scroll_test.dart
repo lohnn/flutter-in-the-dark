@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_in_the_dark/widgets/code_pane.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'code_pane_test_harness.dart';
+// The REAL CodePane (widgets/code_pane.dart) is taint-free since this
+// carve, so the mirror harness (code_pane_test_harness.dart, SHADOW-003's
+// drift-prone byte-identical copy) is gone: this suite mounts the widget
+// the show screen actually renders.
 
 /// Tall enough that its SingleChildScrollView has plenty to scroll inside
 /// the test viewport.
@@ -92,5 +96,24 @@ void main() {
       greaterThanOrEqualTo(0),
       reason: 'pane should drift back up after dwelling at the bottom',
     );
+  });
+
+  testWidgets('switching competitors re-renders the new code (no stale pane)', (
+    tester,
+  ) async {
+    // The /show single-competitor switch REUSES the pane element (same
+    // type, same tree position, no key). Whatever state survives the
+    // update must not pin the old competitor's text — the pane reads its
+    // code from the incoming widget every build.
+    await tester.pumpWidget(
+      _pane(code: 'final playerA = 1;', autoScroll: true),
+    );
+    expect(find.text('final playerA = 1;'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _pane(code: 'final playerB = 2;', autoScroll: true),
+    );
+    expect(find.text('final playerA = 1;'), findsNothing);
+    expect(find.text('final playerB = 2;'), findsOneWidget);
   });
 }

@@ -1,17 +1,19 @@
-/// Test harness: the exact widget tree under test, mirrored from
-/// `lib/widgets/challenger_content.dart` (_CodePane) so the auto-scroll
-/// driver can be exercised under `flutter test`.
-///
-/// The real _CodePane is private, and its library transitively imports
-/// `room_client.dart` → `dart:js_interop` / `package:web`, which cannot
-/// compile for the test VM — the whole app is web-only. Keep this copy
-/// byte-identical to the lib version; drift is caught on review.
-library;
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_in_the_dark/widgets/plasma_loader.dart';
 
+/// One challenger's generated code, as a monospace scrollable.
+///
+/// Deliberately OUTSIDE the W-012 tainted cone (imports only material +
+/// dart:async — no room_client, no compiled_widget), so [CodePane] is the
+/// REAL widget under `flutter test` (the auto-scroll suite mounts it
+/// directly; the old SHADOW-003 byte-identical mirror harness is gone).
+///
+/// Behaviour: when [autoScroll] is set (the /show projector view), the pane
+/// drifts slowly down to the bottom, pauses, drifts back up, and repeats.
+/// When false (the contestant's interactive view), scrolling is left to the
+/// user.
 class CodePane extends StatefulWidget {
   const CodePane({
     super.key,
@@ -22,6 +24,10 @@ class CodePane extends StatefulWidget {
 
   final String code;
   final double fontSize;
+
+  /// When true (the /show projector view), the pane drifts slowly down to
+  /// the bottom, pauses, drifts back up, and repeats. When false (the
+  /// contestant's interactive view), scrolling is left to the user.
   final bool autoScroll;
 
   @override
@@ -31,14 +37,28 @@ class CodePane extends StatefulWidget {
 class _CodePaneState extends State<CodePane> {
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollTimer;
+
+  /// Direction of the current run: `1` drifts down, `-1` drifts back up.
   int _direction = 1;
+
+  /// Ticks remaining in the dwell at the current extreme (plus a beat at
+  /// startup before the first drift). Tracked in ticks rather than wall
+  /// clock so the driver is frame-deterministic and testable.
   int _dwellTicks = 0;
 
+  /// Timer period: one driver per pane (up to ~30 coexist on /show),
+  /// following the same `_clockTimer` Timer.periodic pattern the screens
+  /// use. 20 ticks/s keeps the drift smooth on a projector.
   static const _tick = Duration(milliseconds: 50);
-  static const _startupDwellTicks = 90;
-  static const _extremeDwellTicks = 120;
+  static const _startupDwellTicks = 90; // 4.5s at the top before first drift
+  static const _extremeDwellTicks =
+      120; // 6s pause at each end before reversing
+
+  /// Logical px per tick — 36px/s, projector-slow, tens of seconds for a
+  /// full traverse of typical generated code.
   static const _stepPx = 1.8;
 
+  /// Start or stop the driver when the autoScroll flag changes.
   @override
   void initState() {
     super.initState();
@@ -71,8 +91,10 @@ class _CodePaneState extends State<CodePane> {
     if (!mounted || !_scrollController.hasClients) return;
     final position = _scrollController.position;
 
+    // Content shorter than the viewport: nothing to scroll.
     if (position.maxScrollExtent <= 0) return;
 
+    // Dwelling at an extreme (or the startup beat).
     if (_dwellTicks > 0) {
       _dwellTicks--;
       return;
@@ -82,6 +104,9 @@ class _CodePaneState extends State<CodePane> {
     final down = _direction > 0;
     if ((down && target >= position.maxScrollExtent) ||
         (!down && target <= position.minScrollExtent)) {
+      // Clamp at the extreme and dwell there before reversing. Clamping a
+      // shrunk extent also keeps stale targets safe when the code updates
+      // mid-scroll (the controller clamps its own position too).
       target = down ? position.maxScrollExtent : position.minScrollExtent;
       _direction = -_direction;
       _dwellTicks = _extremeDwellTicks;
@@ -99,7 +124,7 @@ class _CodePaneState extends State<CodePane> {
   @override
   Widget build(BuildContext context) {
     if (widget.code.isEmpty) {
-      return const Center(child: Text('Waiting for code…'));
+      return const PlasmaLoader(label: 'Waiting for code…');
     }
     return SingleChildScrollView(
       controller: _scrollController,
